@@ -110,3 +110,17 @@ export async function logoutAdmin(accessToken: string) {
     method: "POST",
   }, accessToken);
 }
+
+export async function changePassword(accessToken: string, data: {
+  old_password: string;
+  new_password: string;
+  confirm_new_password: string;
+}) {
+  return apiFetch<unknown>("/api/user/password/change/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  }, accessToken);
+}

@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Eye, EyeOff, Check, X } from "lucide-react";
+import { useState, FormEvent } from "react";
+import { ArrowLeft, Eye, EyeOff, Check, X } from "lucide-react";
+import { changePassword, loadStoredAuth } from "../../../services/auth";
+import { ApiError } from "../../../services/api";
 
 type Language = "EN" | "FR";
 
@@ -10,13 +12,24 @@ interface PasswordValidation {
   special: boolean;
 }
 
-export default function ChangePassword({ lang }: { lang: Language }) {
+interface ChangePasswordErrors {
+  old_password?: string[];
+  new_password?: string[];
+  confirm_new_password?: string[];
+  non_field_errors?: string[];
+}
+
+export default function ChangePassword({ lang, onBack }: { lang: Language; onBack: () => void }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<ChangePasswordErrors>({});
+  const [message, setMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const t = {
     title: lang === "EN" ? "Change Password" : "Changer le mot de passe",
@@ -26,6 +39,7 @@ export default function ChangePassword({ lang }: { lang: Language }) {
     confirmPassword: lang === "EN" ? "Confirm Password" : "Confirmer le mot de passe",
     enterCurrent: lang === "EN" ? "Enter current password" : "Entrez le mot de passe actuel",
     enterNew: lang === "EN" ? "Enter new password" : "Entrez le nouveau mot de passe",
+    enterConfirm: lang === "EN" ? "Confirm new password" : "Confirmez le nouveau mot de passe",
     strong: lang === "EN" ? "STRONG" : "FORT",
     cancel: lang === "EN" ? "Cancel" : "Annuler",
     update: lang === "EN" ? "Update Password" : "Mettre à jour",
@@ -33,6 +47,10 @@ export default function ChangePassword({ lang }: { lang: Language }) {
     uppercase: lang === "EN" ? "Contains an uppercase letter" : "Contient une majuscule",
     number: lang === "EN" ? "Contains a number" : "Contient un chiffre",
     special: lang === "EN" ? "Contains a special character" : "Contient un caractère spécial",
+    currentPasswordError: lang === "EN" ? "Current password is incorrect." : "Le mot de passe actuel est incorrect.",
+    passwordMismatch: lang === "EN" ? "Passwords do not match." : "Les mots de passe ne correspondent pas.",
+    success: lang === "EN" ? "Your password has been updated successfully." : "Votre mot de passe a été mis à jour avec succès.",
+    serverError: lang === "EN" ? "Unable to update password. Please try again." : "Impossible de mettre à jour le mot de passe. Veuillez réessayer.",
   };
 
   const validation: PasswordValidation = {
@@ -44,18 +62,106 @@ export default function ChangePassword({ lang }: { lang: Language }) {
 
   const passwordStrength = Object.values(validation).filter(Boolean).length;
   const strengthPercent = (passwordStrength / 4) * 100;
+  const canSubmit = Object.values(validation).every(Boolean) && newPassword === confirmPassword && !submitting;
+
+  const extractApiMessage = (data: any) => {
+    if (!data) return null;
+    if (typeof data === "string") return data;
+    if (Array.isArray(data)) return data.join(" ");
+    if (typeof data === "object") {
+      return Object.values(data)
+        .flatMap((value) => (Array.isArray(value) ? value : [value]))
+        .join(" ");
+    }
+    return String(data);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const { accessToken } = loadStoredAuth();
+
+    setFieldErrors({});
+    setMessage(null);
+    setSuccessMessage(null);
+
+    if (!accessToken) {
+      setMessage(t.serverError);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setMessage(t.passwordMismatch);
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await changePassword(accessToken, {
+        old_password: currentPassword,
+        new_password: newPassword,
+        confirm_new_password: confirmPassword,
+      });
+
+      setSuccessMessage(t.success);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: unknown) {
+      if (error instanceof ApiError) {
+        const errData = error.data;
+        setFieldErrors({
+          old_password: Array.isArray(errData?.old_password) ? errData.old_password : errData?.old_password ? [String(errData.old_password)] : undefined,
+          new_password: Array.isArray(errData?.new_password) ? errData.new_password : errData?.new_password ? [String(errData.new_password)] : undefined,
+          confirm_new_password: Array.isArray(errData?.confirm_new_password) ? errData.confirm_new_password : errData?.confirm_new_password ? [String(errData.confirm_new_password)] : undefined,
+        });
+        setMessage(extractApiMessage(errData) || error.message || t.serverError);
+      } else if (error instanceof Error) {
+        setMessage(error.message);
+      } else {
+        setMessage(t.serverError);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancel = () => {
+    onBack();
+  };
 
   return (
     <main className="flex-1 overflow-y-auto p-4 lg:p-6">
       <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden max-w-3xl mx-auto">
         {/* Header */}
-        <div className="px-6 py-6 text-center border-b border-border">
-          <h1 className="text-2xl font-semibold text-foreground mb-2">{t.title}</h1>
-          <p className="text-sm text-muted-foreground">{t.subtitle}</p>
+        <div className="px-6 py-4 text-white flex items-center gap-3" style={{ background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)" }}>
+          <button
+            onClick={onBack}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            type="button"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="text-xl font-semibold">{t.title}</h1>
         </div>
 
-        {/* Form */}
-        <div className="p-6 lg:p-8 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 lg:p-8 space-y-6">
+          <div>
+            <p className="text-sm text-muted-foreground">{t.subtitle}</p>
+          </div>
+
+          {message && (
+            <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {message}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+              {successMessage}
+            </div>
+          )}
+
           {/* Current Password */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
@@ -77,6 +183,9 @@ export default function ChangePassword({ lang }: { lang: Language }) {
                 {showCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            {fieldErrors.old_password?.length ? (
+              <p className="mt-2 text-xs text-red-600">{fieldErrors.old_password[0]}</p>
+            ) : null}
           </div>
 
           {/* New Password */}
@@ -100,6 +209,9 @@ export default function ChangePassword({ lang }: { lang: Language }) {
                 {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            {fieldErrors.new_password?.length ? (
+              <p className="mt-2 text-xs text-red-600">{fieldErrors.new_password[0]}</p>
+            ) : null}
           </div>
 
           {/* Confirm Password */}
@@ -110,7 +222,7 @@ export default function ChangePassword({ lang }: { lang: Language }) {
             <div className="relative">
               <input
                 type={showConfirm ? "text" : "password"}
-                placeholder={t.enterNew}
+                placeholder={t.enterConfirm}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full px-4 py-3 pr-12 bg-muted/60 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-sm"
@@ -123,6 +235,11 @@ export default function ChangePassword({ lang }: { lang: Language }) {
                 {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            {confirmPassword && newPassword !== confirmPassword ? (
+              <p className="mt-2 text-xs text-red-600">{t.passwordMismatch}</p>
+            ) : fieldErrors.confirm_new_password?.length ? (
+              <p className="mt-2 text-xs text-red-600">{fieldErrors.confirm_new_password[0]}</p>
+            ) : null}
           </div>
 
           {/* Password Strength Indicator */}
@@ -141,46 +258,34 @@ export default function ChangePassword({ lang }: { lang: Language }) {
                 <span className="text-xs font-semibold text-primary">{t.strong}</span>
               </div>
 
-              {/* Validation Checklist */}
               <div className="space-y-2">
-                <ValidationItem
-                  valid={validation.length}
-                  text={t.atLeast8}
-                />
-                <ValidationItem
-                  valid={validation.uppercase}
-                  text={t.uppercase}
-                />
-                <ValidationItem
-                  valid={validation.number}
-                  text={t.number}
-                />
-                <ValidationItem
-                  valid={validation.special}
-                  text={t.special}
-                />
+                <ValidationItem valid={validation.length} text={t.atLeast8} />
+                <ValidationItem valid={validation.uppercase} text={t.uppercase} />
+                <ValidationItem valid={validation.number} text={t.number} />
+                <ValidationItem valid={validation.special} text={t.special} />
               </div>
             </div>
           )}
 
           {/* Buttons */}
-          <div className="flex items-center justify-center gap-4 pt-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
             <button
               type="button"
-              className="px-8 py-2.5 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              onClick={handleCancel}
+              className="w-full sm:w-auto px-8 py-2.5 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
             >
               {t.cancel}
             </button>
             <button
               type="submit"
-              disabled={!Object.values(validation).every(Boolean) || newPassword !== confirmPassword}
-              className="px-8 py-2.5 text-white rounded-lg text-sm font-medium transition-colors shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!canSubmit}
+              className="w-full sm:w-auto px-8 py-2.5 text-white rounded-lg text-sm font-medium transition-colors shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)" }}
             >
-              🔒 {t.update}
+              {submitting ? `${t.update}...` : `🔒 ${t.update}`}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </main>
   );
@@ -200,11 +305,7 @@ function ValidationItem({ valid, text }: { valid: boolean; text: string }) {
           <X size={12} className="text-red-500" />
         )}
       </div>
-      <span
-        className={`text-xs ${
-          valid ? "text-foreground" : "text-red-500"
-        }`}
-      >
+      <span className={`text-xs ${valid ? "text-foreground" : "text-red-500"}`}>
         {text}
       </span>
     </div>

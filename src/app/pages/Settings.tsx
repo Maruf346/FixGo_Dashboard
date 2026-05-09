@@ -39,7 +39,7 @@ export default function Settings({ lang }: { lang: Language }) {
 
   // Render sub-pages
   if (activePage === "change-password") {
-    return <ChangePassword lang={lang} />;
+    return <ChangePassword lang={lang} onBack={handleBack} />;
   }
 
   if (activePage === "privacy-policy") {

@@ -11,6 +11,17 @@ export function getApiUrl(path: string) {
   return `${normalizedBase}${normalizedPath}`;
 }
 
+export class ApiError extends Error {
+  status: number;
+  data: any;
+
+  constructor(message: string, status: number, data: any) {
+    super(message);
+    this.status = status;
+    this.data = data;
+  }
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string) {
   const url = getApiUrl(path);
   const headers: Record<string, string> = {
@@ -28,12 +39,12 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}, token
   try {
     data = text ? JSON.parse(text) : {};
   } catch (error) {
-    throw new Error("Invalid JSON response from API.");
+    throw new ApiError("Invalid JSON response from API.", response.status, text);
   }
 
   if (!response.ok) {
     const message = data?.message || data?.detail || response.statusText || "API request failed";
-    throw new Error(message);
+    throw new ApiError(message, response.status, data);
   }
 
   return data as T;
