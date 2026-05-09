@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Modal, ConfirmModal } from "./components/Modal";
 import { ActionMenu } from "./components/ActionMenu";
+import { AuthUser, clearStoredAuth, loadStoredAuth, loginAdmin, logoutAdmin, saveAuthState } from "../services/auth";
 import {
   LayoutDashboard,
   BookOpen,
@@ -402,9 +403,10 @@ interface NavbarProps {
   onMarkAllRead: () => void;
   onClearAll: () => void;
   onLogout: () => void;
+  user: AuthUser | null;
 }
 
-function Navbar({ lang, onLangChange, activeNav, onMenuOpen, onNavChange, notifications, onNotificationRead, onNotificationDelete, onMarkAllRead, onClearAll, onLogout }: NavbarProps) {
+function Navbar({ lang, onLangChange, activeNav, onMenuOpen, onNavChange, notifications, onNotificationRead, onNotificationDelete, onMarkAllRead, onClearAll, onLogout, user }: NavbarProps) {
   const [langOpen, setLangOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -413,6 +415,9 @@ function Navbar({ lang, onLangChange, activeNav, onMenuOpen, onNavChange, notifi
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const allRead = notifications.length > 0 && notifications.every((n) => n.isRead);
+  const profileName = user?.full_name?.trim() || user?.email || (lang === "EN" ? "Admin" : "Admin");
+  const profileRole = user?.role ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}` : (lang === "EN" ? "Admin" : "Admin");
+  const profileImage = user?.profile_picture || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=48&h=48&fit=crop&auto=format";
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -574,13 +579,13 @@ function Navbar({ lang, onLangChange, activeNav, onMenuOpen, onNavChange, notifi
             className="flex items-center gap-2.5 cursor-pointer hover:bg-muted/50 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
           >
             <img
-              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=48&h=48&fit=crop&auto=format"
-              alt="Jack Brown"
+              src={profileImage}
+              alt={profileName}
               className="w-9 h-9 rounded-full object-cover border-2 border-border"
             />
             <div className="hidden md:block">
-              <p className="text-sm font-bold text-[#111827] leading-tight">Jack Brown</p>
-              <p className="text-xs text-muted-foreground leading-tight">Admin</p>
+              <p className="text-sm font-bold text-[#111827] leading-tight">{profileName}</p>
+              <p className="text-xs text-muted-foreground leading-tight">{profileRole}</p>
             </div>
             <ChevronDown size={14} className={`hidden md:block text-muted-foreground transition-transform ${profileOpen ? "rotate-180" : ""}`} />
           </div>
@@ -1210,17 +1215,50 @@ function ComingSoon({ lang, navId }: { lang: Language; navId: string }) {
 // ─── App root ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const storedAuth = useMemo(() => loadStoredAuth(), []);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(storedAuth.accessToken && storedAuth.user));
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => storedAuth.user);
   const [activeNav, setActiveNav] = useState("dashboard");
   const [lang, setLang] = useState<Language>("EN");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const handleLogin = (email: string, password: string) => {
-    // For now, accept any credentials
-    console.log("User logged in:", email);
-    setIsAuthenticated(true);
+  // Previous mock login handler kept for future reference:
+  // const handleLogin = (email: string, password: string) => {
+  //   console.log("User logged in:", email);
+  //   setIsAuthenticated(true);
+  // };
+
+  const handleLogin = async (email: string, password: string, rememberMe: boolean) => {
+    setAuthLoading(true);
+    setAuthError(null);
+
+    try {
+      const data = await loginAdmin(email, password);
+      saveAuthState(
+        {
+          accessToken: data.tokens.access,
+          refreshToken: data.tokens.refresh,
+          user: data.user,
+        },
+        rememberMe
+      );
+
+      setCurrentUser(data.user);
+      setIsAuthenticated(true);
+    } catch (error) {
+      if (error instanceof Error) {
+        setAuthError(error.message);
+      } else {
+        setAuthError(lang === "EN" ? "Login failed. Please try again." : "Échec de la connexion. Veuillez réessayer.");
+      }
+      console.error("Login error:", error);
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   const handleNotificationRead = (id: string) => {
@@ -1239,13 +1277,35 @@ export default function App() {
     setNotifications([]);
   };
 
-  const handleLogoutConfirm = () => {
-    console.log("User logged out");
-    setIsAuthenticated(false);
-    setActiveNav("dashboard"); // Reset to dashboard for next login
-    setNotifications(INITIAL_NOTIFICATIONS); // Reset notifications
-    setSidebarOpen(false);
+  // Previous mock logout handler preserved for future reference:
+  // const handleLogoutConfirm = () => {
+  //   console.log("User logged out");
+  //   setIsAuthenticated(false);
+  //   setActiveNav("dashboard"); // Reset to dashboard for next login
+  //   setNotifications(INITIAL_NOTIFICATIONS); // Reset notifications
+  //   setSidebarOpen(false);
+  //   setShowLogoutConfirm(false);
+  // };
+
+  const handleLogoutConfirm = async () => {
     setShowLogoutConfirm(false);
+
+    const { refreshToken } = loadStoredAuth();
+
+    try {
+      if (refreshToken) {
+        await logoutAdmin(refreshToken);
+      }
+    } catch (error) {
+      console.warn("Logout API failed:", error);
+    } finally {
+      clearStoredAuth();
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setActiveNav("dashboard"); // Reset to dashboard for next login
+      setNotifications(INITIAL_NOTIFICATIONS); // Reset notifications
+      setSidebarOpen(false);
+    }
   };
 
   function renderPage() {
@@ -1263,7 +1323,7 @@ export default function App() {
 
   // Show login page if not authenticated
   if (!isAuthenticated) {
-    return <Login lang={lang} onLangChange={setLang} onLogin={handleLogin} />;
+    return <Login lang={lang} onLangChange={setLang} onLogin={handleLogin} loading={authLoading} error={authError} />;
   }
 
   // Show dashboard if authenticated
@@ -1291,6 +1351,7 @@ export default function App() {
           onMarkAllRead={handleMarkAllRead}
           onClearAll={handleClearAll}
           onLogout={() => setShowLogoutConfirm(true)}
+          user={currentUser}
         />
         {renderPage()}
       </div>

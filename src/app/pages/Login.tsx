@@ -6,10 +6,12 @@ type Language = "EN" | "FR";
 interface LoginProps {
   lang: Language;
   onLangChange: (l: Language) => void;
-  onLogin: (email: string, password: string) => void;
+  onLogin: (email: string, password: string, rememberMe: boolean) => Promise<void>;
+  loading?: boolean;
+  error?: string | null;
 }
 
-export default function Login({ lang, onLangChange, onLogin }: LoginProps) {
+export default function Login({ lang, onLangChange, onLogin, loading = false, error = null }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -27,9 +29,13 @@ export default function Login({ lang, onLangChange, onLogin }: LoginProps) {
     login: lang === "EN" ? "Login" : "Connexion",
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(email, password);
+    try {
+      await onLogin(email, password, rememberMe);
+    } catch {
+      // Error is handled by App state, no additional action needed here.
+    }
   };
 
   return (
@@ -110,6 +116,11 @@ export default function Login({ lang, onLangChange, onLogin }: LoginProps) {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
             {/* Email Field */}
             <div>
               <label
@@ -182,20 +193,21 @@ export default function Login({ lang, onLangChange, onLogin }: LoginProps) {
             {/* Login Button */}
             <button
               type="submit"
-              className="w-full py-3 text-white rounded-xl text-sm font-semibold shadow-lg hover:opacity-90 transition-all"
+              disabled={loading}
+              className="w-full py-3 text-white rounded-xl text-sm font-semibold shadow-lg hover:opacity-90 transition-all disabled:cursor-not-allowed disabled:opacity-70"
               style={{
                 background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)",
                 fontFamily: "Inter, sans-serif",
               }}
             >
-              {t.login}
+              {loading ? (lang === "EN" ? "Signing in..." : "Connexion...") : t.login}
             </button>
           </form>
         </div>
 
         {/* Footer */}
         <p className="text-center text-xs text-[#6b7280] mt-6">
-          © 2024 FIXGO. {lang === "EN" ? "All rights reserved." : "Tous droits réservés."}
+          © 2026 FIXGO - On-Demand Artisan Service Platform. {lang === "EN" ? "All rights reserved." : "Tous droits réservés."}
         </p>
       </div>
     </div>
