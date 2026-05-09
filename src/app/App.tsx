@@ -1290,11 +1290,11 @@ export default function App() {
   const handleLogoutConfirm = async () => {
     setShowLogoutConfirm(false);
 
-    const { refreshToken } = loadStoredAuth();
+    const { refreshToken, accessToken } = loadStoredAuth();
 
     try {
-      if (refreshToken) {
-        await logoutAdmin(refreshToken);
+      if (accessToken && refreshToken) {
+        await logoutAdmin(refreshToken, accessToken);
       }
     } catch (error) {
       console.warn("Logout API failed:", error);
@@ -1317,7 +1317,7 @@ export default function App() {
     if (activeNav === "message")   return <Messages lang={lang} />;
     if (activeNav === "payment")   return <Payment lang={lang} />;
     if (activeNav === "settings")  return <Settings lang={lang} />;
-    if (activeNav === "profile")   return <Profile lang={lang} />;
+    if (activeNav === "profile")   return <Profile lang={lang} user={currentUser} />;
     return <ComingSoon lang={lang} navId={activeNav} />;
   }
 

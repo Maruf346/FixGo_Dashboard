@@ -73,22 +73,40 @@ export async function loginAdmin(email: string, password: string) {
   return data;
 }
 
-export async function logoutAdmin(refreshToken: string) {
-  const url = getApiUrl("/api/user/logout/");
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh: refreshToken }),
-  });
+export interface ProfileData {
+  id: string;
+  full_name: string | null;
+  email: string;
+  profile_picture: string | null;
+  phone: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
-  if (!response.ok) {
-    const text = await response.text();
-    try {
-      const data = text ? JSON.parse(text) : null;
-      const message = data?.message || data?.detail || response.statusText;
-      throw new Error(message || "Logout failed.");
-    } catch {
-      throw new Error(response.statusText || "Logout failed.");
-    }
-  }
+export async function getAdminProfile(accessToken: string): Promise<ProfileData> {
+  return apiFetch<ProfileData>("/api/user/admin/profile/", {
+    method: "GET",
+  }, accessToken);
+}
+
+export async function updateAdminProfile(accessToken: string, data: {
+  full_name?: string;
+  phone?: string;
+  profile_picture?: File | null;
+}): Promise<ProfileData> {
+  const formData = new FormData();
+  if (data.full_name !== undefined) formData.append("full_name", data.full_name);
+  if (data.phone !== undefined) formData.append("phone", data.phone);
+  if (data.profile_picture) formData.append("profile_picture", data.profile_picture);
+
+  return apiFetch<ProfileData>("/api/user/admin/profile/", {
+    method: "PATCH",
+    body: formData,
+  }, accessToken);
+}
+
+export async function logoutAdmin(accessToken: string) {
+  return apiFetch("/api/user/admin/logout/", {
+    method: "POST",
+  }, accessToken);
 }

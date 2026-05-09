@@ -11,9 +11,17 @@ export function getApiUrl(path: string) {
   return `${normalizedBase}${normalizedPath}`;
 }
 
-export async function apiFetch<T>(path: string, options: RequestInit = {}) {
+export async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string) {
   const url = getApiUrl(path);
-  const response = await fetch(url, options);
+  const headers: Record<string, string> = {
+    ...options.headers as Record<string, string>,
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, { ...options, headers });
   const text = await response.text();
 
   let data: any;
@@ -30,3 +38,4 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}) {
 
   return data as T;
 }
+
