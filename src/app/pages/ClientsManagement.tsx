@@ -237,7 +237,7 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 whitespace-nowrap">
-                        <AvatarImg src={c.avatar || ""} name={c.full_name} />
+                        <AvatarImg src={c.profile_picture || ""} name={c.full_name} />
                         <span className="font-medium text-foreground">{c.full_name}</span>
                       </div>
                     </td>
@@ -292,7 +292,7 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                 className="px-5 py-4 hover:bg-muted/40 transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2">
-                  <AvatarImg src={c.avatar || ""} name={c.full_name} />
+                  <AvatarImg src={c.profile_picture || ""} name={c.full_name} />
                   <div>
                     <p className="text-sm font-semibold text-foreground">{c.full_name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{c.email}</p>
@@ -388,7 +388,7 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
           <div className="space-y-6">
             {/* Client Header */}
             <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
-              <img src={selectedClient.avatar || ""} alt={selectedClient.full_name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
+              <img src={selectedClient.profile_picture || ""} alt={selectedClient.full_name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
               <div>
                 <h3 className="text-lg font-semibold text-foreground">{selectedClient.full_name}</h3>
                 <p className="text-sm text-muted-foreground">{selectedClient.email}</p>
