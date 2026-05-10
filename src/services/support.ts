@@ -39,8 +39,8 @@ export async function deleteFaq(token: string, id: string) {
   );
 }
 
-export async function getAboutUs() {
-  return apiFetch<RichContentResponse>("/api/supports/about-us/");
+export async function getAboutUs(token?: string) {
+  return apiFetch<RichContentResponse>("/api/supports/about-us/", { method: "GET" }, token);
 }
 
 export async function patchAboutUs(token: string, content: string) {
@@ -55,8 +55,8 @@ export async function patchAboutUs(token: string, content: string) {
   );
 }
 
-export async function getTerms() {
-  return apiFetch<RichContentResponse>("/api/supports/terms/");
+export async function getTerms(token?: string) {
+  return apiFetch<RichContentResponse>("/api/supports/terms/", { method: "GET" }, token);
 }
 
 export async function patchTerms(token: string, content: string) {
@@ -71,8 +71,8 @@ export async function patchTerms(token: string, content: string) {
   );
 }
 
-export async function getPrivacy() {
-  return apiFetch<RichContentResponse>("/api/supports/privacy/");
+export async function getPrivacy(token?: string) {
+  return apiFetch<RichContentResponse>("/api/supports/privacy/", { method: "GET" }, token);
 }
 
 export async function patchPrivacy(token: string, content: string) {

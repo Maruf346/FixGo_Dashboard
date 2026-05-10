@@ -44,7 +44,8 @@ export default function RichTextPage({ lang, title, onBack, getContent, patchCon
         setDraft(response.content ?? "");
         setUpdatedAt(response.updated_at ?? null);
       } catch (err) {
-        setError(t.loading);
+        const message = err instanceof Error ? err.message : t.loadError;
+        setError(message || t.loadError);
         console.error("Failed to load rich content:", err);
       } finally {
         setLoading(false);

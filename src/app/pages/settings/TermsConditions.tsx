@@ -12,7 +12,13 @@ export default function TermsConditions({ lang, onBack }: { lang: Language; onBa
       lang={lang}
       title={title}
       onBack={onBack}
-      getContent={getTerms}
+      getContent={async () => {
+        const { accessToken } = loadStoredAuth();
+        if (!accessToken) {
+          throw new Error(lang === "EN" ? "Authentication required." : "Authentification requise.");
+        }
+        return getTerms(accessToken);
+      }}
       patchContent={async (content) => {
         const { accessToken } = loadStoredAuth();
         if (!accessToken) {

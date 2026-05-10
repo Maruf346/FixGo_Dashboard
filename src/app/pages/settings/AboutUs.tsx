@@ -12,7 +12,13 @@ export default function AboutUs({ lang, onBack }: { lang: Language; onBack: () =
       lang={lang}
       title={title}
       onBack={onBack}
-      getContent={getAboutUs}
+      getContent={async () => {
+        const { accessToken } = loadStoredAuth();
+        if (!accessToken) {
+          throw new Error(lang === "EN" ? "Authentication required." : "Authentification requise.");
+        }
+        return getAboutUs(accessToken);
+      }}
       patchContent={async (content) => {
         const { accessToken } = loadStoredAuth();
         if (!accessToken) {
