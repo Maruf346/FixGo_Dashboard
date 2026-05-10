@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   ArrowUpDown,
@@ -9,55 +9,26 @@ import {
   Star,
   Eye,
   UserX,
+  UserCheck,
   Trash2,
   MapPin,
   Briefcase,
   Award,
+  Zap,
 } from "lucide-react";
 import { Modal, ConfirmModal } from "../components/Modal";
 import { ActionMenu } from "../components/ActionMenu";
+import { getArtisans, getArtisanDetail, toggleUserActive, deleteUser, Artisan, ArtisanDetail } from "../../services/artisans";
 
 type Language = "EN" | "FR";
-type SortKey = "name" | "jobsCompleted" | "rating";
+type SortKey = "full_name" | "total_jobs_done" | "average_rating" | "-joined_at";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE_OPTIONS = [8, 16, 20];
 
-interface Artisan {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  jobsCompleted: number;
-  rating: number;
-  lastActive: string;
-  location: string;
-  avatar: string;
-  specialty: string;
+interface ArtisanWithLocation extends Artisan {
+  locationDisplay: string;
 }
-
-const MOCK_ARTISANS: Artisan[] = [
-  { id: "a1",  name: "Alex Smith",     email: "justinleo@gmail.com",      phone: "+1 887 839 8383", jobsCompleted: 30, rating: 5.0, lastActive: "1h ago",    location: "San Francisco, CA",  avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&auto=format", specialty: "Plumber" },
-  { id: "a2",  name: "David Lee",      email: "david.lee@gmail.com",      phone: "+1 415 234 5678", jobsCompleted: 45, rating: 4.9, lastActive: "2h ago",    location: "Los Angeles, CA",    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&auto=format", specialty: "Electrician" },
-  { id: "a3",  name: "Emma Wilson",    email: "emma.wilson@gmail.com",    phone: "+1 213 456 7890", jobsCompleted: 52, rating: 5.0, lastActive: "30m ago",   location: "San Diego, CA",      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=40&h=40&fit=crop&auto=format", specialty: "Cleaner" },
-  { id: "a4",  name: "James Brown",    email: "james.brown@gmail.com",    phone: "+1 619 789 0123", jobsCompleted: 38, rating: 4.8, lastActive: "4h ago",    location: "Seattle, WA",        avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=40&h=40&fit=crop&auto=format", specialty: "Carpenter" },
-  { id: "a5",  name: "Sophia Garcia",  email: "sophia.garcia@gmail.com",  phone: "+1 206 012 3456", jobsCompleted: 41, rating: 4.9, lastActive: "1h ago",    location: "Portland, OR",       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=40&h=40&fit=crop&auto=format", specialty: "Painter" },
-  { id: "a6",  name: "Michael Chen",   email: "michael.chen@gmail.com",   phone: "+1 503 345 6789", jobsCompleted: 35, rating: 4.7, lastActive: "5h ago",    location: "Austin, TX",         avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=40&h=40&fit=crop&auto=format", specialty: "HVAC Tech" },
-  { id: "a7",  name: "Olivia Martinez",email: "olivia.martinez@gmail.com",phone: "+1 512 678 9012", jobsCompleted: 48, rating: 5.0, lastActive: "20m ago",   location: "Houston, TX",        avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=40&h=40&fit=crop&auto=format", specialty: "Tiler" },
-  { id: "a8",  name: "Noah Johnson",   email: "noah.johnson@gmail.com",   phone: "+1 713 901 2345", jobsCompleted: 33, rating: 4.6, lastActive: "3h ago",    location: "Dallas, TX",         avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=40&h=40&fit=crop&auto=format", specialty: "Locksmith" },
-  { id: "a9",  name: "Ava Anderson",   email: "ava.anderson@gmail.com",   phone: "+1 214 234 5678", jobsCompleted: 55, rating: 4.9, lastActive: "45m ago",   location: "Phoenix, AZ",        avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=40&h=40&fit=crop&auto=format", specialty: "Roofer" },
-  { id: "a10", name: "Liam Thomas",    email: "liam.thomas@gmail.com",    phone: "+1 602 567 8901", jobsCompleted: 29, rating: 4.8, lastActive: "6h ago",    location: "Denver, CO",         avatar: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=40&h=40&fit=crop&auto=format", specialty: "Gardener" },
-  { id: "a11", name: "Mia Rodriguez",  email: "mia.rodriguez@gmail.com",  phone: "+1 303 890 1234", jobsCompleted: 44, rating: 5.0, lastActive: "1h ago",    location: "Las Vegas, NV",      avatar: "https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=40&h=40&fit=crop&auto=format", specialty: "Plumber" },
-  { id: "a12", name: "Benjamin White",  email: "ben.white@gmail.com",     phone: "+1 702 123 4567", jobsCompleted: 37, rating: 4.7, lastActive: "2h ago",    location: "Miami, FL",          avatar: "https://images.unsplash.com/photo-1552058544-f2b08422138a?w=40&h=40&fit=crop&auto=format", specialty: "Electrician" },
-  { id: "a13", name: "Charlotte Taylor",email: "charlotte.t@gmail.com",   phone: "+1 305 456 7890", jobsCompleted: 50, rating: 4.9, lastActive: "30m ago",   location: "Orlando, FL",        avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=40&h=40&fit=crop&auto=format", specialty: "Cleaner" },
-  { id: "a14", name: "Lucas Moore",    email: "lucas.moore@gmail.com",    phone: "+1 407 789 0123", jobsCompleted: 32, rating: 4.8, lastActive: "4h ago",    location: "Tampa, FL",          avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=40&h=40&fit=crop&auto=format", specialty: "Carpenter" },
-  { id: "a15", name: "Amelia Davis",   email: "amelia.davis@gmail.com",   phone: "+1 813 012 3456", jobsCompleted: 46, rating: 5.0, lastActive: "1h ago",    location: "Boston, MA",         avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=40&h=40&fit=crop&auto=format", specialty: "Painter" },
-  { id: "a16", name: "Ethan Wilson",   email: "ethan.wilson@gmail.com",   phone: "+1 617 345 6789", jobsCompleted: 39, rating: 4.6, lastActive: "5h ago",    location: "Chicago, IL",        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&auto=format", specialty: "HVAC Tech" },
-  { id: "a17", name: "Isabella Garcia",email: "isabella.g@gmail.com",     phone: "+1 312 678 9012", jobsCompleted: 42, rating: 4.9, lastActive: "20m ago",   location: "Philadelphia, PA",   avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=40&h=40&fit=crop&auto=format", specialty: "Tiler" },
-  { id: "a18", name: "Mason Lee",      email: "mason.lee@gmail.com",      phone: "+1 215 901 2345", jobsCompleted: 36, rating: 4.7, lastActive: "3h ago",    location: "Atlanta, GA",        avatar: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=40&h=40&fit=crop&auto=format", specialty: "Locksmith" },
-  { id: "a19", name: "Harper Martin",  email: "harper.martin@gmail.com",  phone: "+1 404 234 5678", jobsCompleted: 49, rating: 5.0, lastActive: "45m ago",   location: "Nashville, TN",      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=40&h=40&fit=crop&auto=format", specialty: "Roofer" },
-  { id: "a20", name: "Logan Thompson", email: "logan.t@gmail.com",        phone: "+1 629 567 8901", jobsCompleted: 34, rating: 4.8, lastActive: "6h ago",    location: "Charlotte, NC",      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=40&h=40&fit=crop&auto=format", specialty: "Gardener" },
-];
 
 function AvatarImg({ src, name }: { src: string; name: string }) {
   return <img src={src} alt={name} className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0" />;
@@ -68,16 +39,17 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 function RatingStars({ rating }: { rating: number }) {
+  const ratingNum = parseFloat(rating);
   return (
     <div className="flex items-center gap-1">
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
           size={14}
-          className={star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}
+          className={star <= Math.round(ratingNum) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}
         />
       ))}
-      <span className="text-sm font-medium text-foreground ml-1">{rating.toFixed(1)}</span>
+      <span className="text-sm font-medium text-foreground ml-1">{ratingNum.toFixed(1)}</span>
     </div>
   );
 }
@@ -101,58 +73,94 @@ function EmptyState({ lang }: { lang: Language }) {
 }
 
 export default function ArtisanManagement({ lang }: { lang: Language }) {
+  const [artisans, setArtisans] = useState<ArtisanWithLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortKey, setSortKey] = useState<SortKey>("-joined_at");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
-  const [selectedArtisan, setSelectedArtisan] = useState<Artisan | null>(null);
-  const [deactivateArtisan, setDeactivateArtisan] = useState<Artisan | null>(null);
-  const [deleteArtisan, setDeleteArtisan] = useState<Artisan | null>(null);
+  const [selectedArtisan, setSelectedArtisan] = useState<ArtisanDetail | null>(null);
+  const [deactivateArtisan, setDeactivateArtisan] = useState<ArtisanWithLocation | null>(null);
+  const [deleteArtisan, setDeleteArtisan] = useState<ArtisanWithLocation | null>(null);
+  const [toggling, setToggling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const fetchArtisans = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await getArtisans({
+        page,
+        page_size: pageSize,
+        search: search || undefined,
+        ordering: sortKey,
+      });
+      const artisansWithLocation = response.results.map((artisan: Artisan) => ({
+        ...artisan,
+        locationDisplay: artisan.location
+          ? `${artisan.location.city || ""}, ${artisan.location.state || ""}, ${artisan.location.country || ""}`.replace(/^, |, $/, "").replace(/, , /g, ", ")
+          : "N/A",
+      }));
+      setArtisans(artisansWithLocation);
+      setTotalCount(response.count);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch artisans");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchArtisans();
+  }, [page, pageSize, sortKey, search]);
+
+  const fetchArtisanDetail = async (artisanId: string) => {
+    try {
+      const detail = await getArtisanDetail(artisanId);
+      setSelectedArtisan(detail);
+    } catch (err) {
+      console.error("Failed to fetch artisan detail:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedArtisan && typeof selectedArtisan === 'object' && 'id' in selectedArtisan && !('booking_history' in selectedArtisan)) {
+      fetchArtisanDetail(selectedArtisan.id);
+    }
+  }, [selectedArtisan]);
 
   const t = {
-    search:        lang === "EN" ? "Search artisans by name, email, location…" : "Rechercher par nom, email, localisation…",
+    search:        lang === "EN" ? "Search artisans by name, email…" : "Rechercher par nom, email…",
     name:          lang === "EN" ? "Name" : "Nom",
     email:         lang === "EN" ? "Email" : "Email",
     phone:         lang === "EN" ? "Phone number" : "Téléphone",
-    jobsCompleted: lang === "EN" ? "Jobs Completed" : "Emplois terminés",
+    jobsCompleted: lang === "EN" ? "Jobs Done" : "Emplois effectués",
     rating:        lang === "EN" ? "Rating" : "Note",
-    lastActive:    lang === "EN" ? "Last Active" : "Dernière activité",
     location:      lang === "EN" ? "Location" : "Localisation",
     showResult:    lang === "EN" ? "Show result:" : "Résultats :",
-    completed:     lang === "EN" ? "completed" : "terminés",
     actions:       lang === "EN" ? "Actions" : "Actions",
     viewDetails:   lang === "EN" ? "View Details" : "Voir détails",
     deactivate:    lang === "EN" ? "Deactivate" : "Désactiver",
+    activate:      lang === "EN" ? "Activate" : "Activer",
     delete:        lang === "EN" ? "Delete" : "Supprimer",
   };
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("asc"); }
+    if (sortKey === key) {
+      setSortKey(key.startsWith('-') ? key.substring(1) as SortKey : `-${key}` as SortKey);
+    } else {
+      setSortKey(key);
+    }
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return MOCK_ARTISANS.filter(a =>
-      !q ||
-      a.name.toLowerCase().includes(q) ||
-      a.email.toLowerCase().includes(q) ||
-      a.location.toLowerCase().includes(q) ||
-      a.specialty.toLowerCase().includes(q)
-    ).sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === "name") cmp = a.name.localeCompare(b.name);
-      else if (sortKey === "jobsCompleted") cmp = a.jobsCompleted - b.jobsCompleted;
-      else if (sortKey === "rating") cmp = a.rating - b.rating;
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [search, sortKey, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const filtered = artisans;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const paginated = artisans;
 
   const pageNumbers = useMemo(() => {
     const pages: (number | "…")[] = [];
@@ -167,6 +175,25 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
     }
     return pages;
   }, [page, totalPages]);
+
+  const getVerificationStatusColor = (status: string) => {
+    switch (status) {
+      case "verified": return "bg-green-50 text-green-600 border-green-200";
+      case "pending": return "bg-yellow-50 text-yellow-600 border-yellow-200";
+      case "rejected": return "bg-red-50 text-red-600 border-red-200";
+      default: return "bg-gray-50 text-gray-600 border-gray-200";
+    }
+  };
+
+  const getVerificationStatusLabel = (status: string) => {
+    switch (status) {
+      case "verified": return lang === "EN" ? "Verified" : "Vérifié";
+      case "pending": return lang === "EN" ? "Pending Review" : "En attente";
+      case "rejected": return lang === "EN" ? "Rejected" : "Rejeté";
+      case "unverified": return lang === "EN" ? "Unverified" : "Non vérifié";
+      default: return status;
+    }
+  };
 
   return (
     <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
@@ -185,23 +212,49 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
           </div>
         </div>
 
+        {/* Loading state */}
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="ml-2 text-sm text-muted-foreground">
+              {lang === "EN" ? "Loading artisans..." : "Chargement des artisans..."}
+            </span>
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && !loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <p className="text-sm text-red-600 mb-2">{error}</p>
+              <button
+                onClick={fetchArtisans}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                {lang === "EN" ? "Try Again" : "Réessayer"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Desktop table */}
+        {!loading && !error && (
+          <>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/20">
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("name")}>
-                  {t.name}<SortIcon active={sortKey === "name"} dir={sortDir} />
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("full_name")}>
+                  {t.name}<SortIcon active={sortKey === "full_name"} dir={sortDir} />
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.email}</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.phone}</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("jobsCompleted")}>
-                  {t.jobsCompleted}<SortIcon active={sortKey === "jobsCompleted"} dir={sortDir} />
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("total_jobs_done")}>
+                  {t.jobsCompleted}<SortIcon active={sortKey === "total_jobs_done"} dir={sortDir} />
                 </th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("rating")}>
-                  {t.rating}<SortIcon active={sortKey === "rating"} dir={sortDir} />
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("average_rating")}>
+                  {t.rating}<SortIcon active={sortKey === "average_rating"} dir={sortDir} />
                 </th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.lastActive}</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.location}</th>
                 <th className="px-3 py-3">{t.actions}</th>
               </tr>
@@ -209,7 +262,7 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
             <tbody>
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={7} className="px-5 py-16 text-center">
                     <EmptyState lang={lang} />
                   </td>
                 </tr>
@@ -222,21 +275,15 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 whitespace-nowrap">
-                        <AvatarImg src={a.avatar} name={a.name} />
-                        <div>
-                          <p className="font-medium text-foreground">{a.name}</p>
-                          <p className="text-xs text-muted-foreground">{a.specialty}</p>
-                        </div>
+                        <AvatarImg src={a.profile_picture || ""} name={a.full_name} />
+                        <span className="font-medium text-foreground">{a.full_name}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3.5 text-muted-foreground">{a.email}</td>
                     <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{a.phone}</td>
-                    <td className="px-5 py-3.5 text-foreground">{a.jobsCompleted} {t.completed}</td>
-                    <td className="px-5 py-3.5">
-                      <RatingStars rating={a.rating} />
-                    </td>
-                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{a.lastActive}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{a.location}</td>
+                    <td className="px-5 py-3.5 text-foreground">{a.total_jobs_done}</td>
+                    <td className="px-5 py-3.5"><RatingStars rating={a.average_rating} /></td>
+                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{a.locationDisplay}</td>
                     <td className="px-3 py-3.5">
                       <ActionMenu
                         items={[
@@ -246,10 +293,10 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
                             onClick: () => setSelectedArtisan(a),
                           },
                           {
-                            label: t.deactivate,
-                            icon: <UserX size={14} />,
+                            label: a.is_active ? t.deactivate : t.activate,
+                            icon: a.is_active ? <UserX size={14} /> : <UserCheck size={14} />,
                             onClick: () => setDeactivateArtisan(a),
-                            className: "text-orange-600",
+                            className: a.is_active ? "text-orange-600" : "text-green-600",
                           },
                           {
                             label: t.delete,
@@ -278,34 +325,37 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
                 onClick={() => setSelectedArtisan(a)}
                 className="px-5 py-4 hover:bg-muted/40 transition-colors cursor-pointer"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <AvatarImg src={a.avatar} name={a.name} />
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{a.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{a.specialty}</p>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <AvatarImg src={a.profile_picture || ""} name={a.full_name} />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{a.full_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{a.email}</p>
                   </div>
-                  <RatingStars rating={a.rating} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.phone}</p>
+                    <p className="text-xs text-foreground">{a.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.location}</p>
+                    <p className="text-xs text-foreground truncate">{a.locationDisplay}</p>
+                  </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.jobsCompleted}</p>
-                    <p className="text-sm font-bold text-foreground">{a.jobsCompleted}</p>
+                    <p className="text-sm font-bold text-foreground">{a.total_jobs_done}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.lastActive}</p>
-                    <p className="text-xs text-foreground">{a.lastActive}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.location}</p>
-                    <p className="text-xs text-foreground truncate">{a.location}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.rating}</p>
+                    <div className="text-xs"><RatingStars rating={a.average_rating} /></div>
                   </div>
                 </div>
               </div>
             ))
           )}
         </div>
+          </>
+        )}
 
         {/* Pagination */}
         {filtered.length > 0 && (
@@ -318,12 +368,18 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
                   className="flex items-center gap-1 px-2.5 py-1 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
                   {pageSize}
-                  <ChevronDown size={12} className={`transition-transform ${pageSizeOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown size={14} className={`transition-transform ${pageSizeOpen ? "rotate-180" : ""}`} />
                 </button>
                 {pageSizeOpen && (
-                  <div className="absolute left-0 bottom-full mb-1 w-20 bg-card rounded-xl border border-border shadow-lg overflow-hidden z-50">
-                    {PAGE_SIZE_OPTIONS.map(s => (
-                      <button key={s} onClick={() => { setPageSize(s); setPage(1); setPageSizeOpen(false); }} className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${pageSize === s ? "text-primary font-semibold" : "text-foreground"}`}>{s}</button>
+                  <div className="absolute z-10 top-full left-0 mt-1 border border-border rounded-lg bg-card shadow-lg">
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => { setPageSize(size); setPageSizeOpen(false); setPage(1); }}
+                        className={`block w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${size === pageSize ? "bg-muted font-medium" : ""}`}
+                      >
+                        {size}
+                      </button>
                     ))}
                   </div>
                 )}
@@ -331,32 +387,43 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
             </div>
 
             <div className="flex items-center gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                <ChevronLeft size={14} />
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-1.5 border border-border rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={16} />
               </button>
 
-              {pageNumbers.map((pn, i) =>
-                pn === "…" ? (
-                  <span key={`ellipsis-${i}`} className="w-8 h-8 flex items-center justify-center text-sm text-muted-foreground">…</span>
-                ) : (
-                  <button
-                    key={pn}
-                    onClick={() => setPage(pn as number)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${page === pn ? "text-white shadow-sm" : "border border-border text-muted-foreground hover:bg-muted"}`}
-                    style={page === pn ? { background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)" } : undefined}
-                  >
-                    {pn}
-                  </button>
-                )
-              )}
+              {pageNumbers.map((num, i) => (
+                <button
+                  key={i}
+                  onClick={() => typeof num === "number" && setPage(num)}
+                  disabled={num === "…"}
+                  className={`px-2.5 py-1.5 text-sm rounded-lg transition-colors ${
+                    num === page
+                      ? "bg-primary text-primary-foreground font-medium"
+                      : num === "…"
+                      ? "text-muted-foreground cursor-default"
+                      : "border border-border text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
 
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                <ChevronRight size={14} />
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-1.5 border border-border rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>
         )}
       </div>
+
 
       {/* Artisan Details Modal */}
       {selectedArtisan && (
@@ -369,130 +436,231 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
           <div className="space-y-6">
             {/* Artisan Header */}
             <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
-              <img src={selectedArtisan.avatar} alt={selectedArtisan.name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-foreground">{selectedArtisan.name}</h3>
-                <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <Briefcase size={14} />
-                  {selectedArtisan.specialty}
-                </p>
-                <div className="mt-2">
-                  <RatingStars rating={selectedArtisan.rating} />
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-600 border border-green-200">
-                  {lang === "EN" ? "Active" : "Actif"}
-                </span>
-                <p className="text-xs text-muted-foreground mt-2">{selectedArtisan.lastActive}</p>
+              <img src={selectedArtisan.profile_picture || ""} alt={selectedArtisan.full_name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">{selectedArtisan.full_name}</h3>
+                <p className="text-sm text-muted-foreground">{selectedArtisan.email}</p>
+                <p className="text-sm text-muted-foreground">{selectedArtisan.phone}</p>
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <Award size={16} className="text-blue-600" />
-                  <p className="text-xs text-blue-700">
-                    {lang === "EN" ? "Jobs Completed" : "Emplois terminés"}
-                  </p>
-                </div>
-                <p className="text-2xl font-bold text-blue-600">{selectedArtisan.jobsCompleted}</p>
+            {/* Status and Verification */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-700 mb-1">{lang === "EN" ? "Occupation" : "Profession"}</p>
+                <p className="text-sm font-semibold text-foreground">{selectedArtisan.occupation || "N/A"}</p>
               </div>
-              <div className="p-4 bg-yellow-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <Star size={16} className="text-yellow-600" />
-                  <p className="text-xs text-yellow-700">
-                    {lang === "EN" ? "Average Rating" : "Note moyenne"}
-                  </p>
-                </div>
-                <p className="text-2xl font-bold text-yellow-600">{selectedArtisan.rating.toFixed(1)}</p>
+              <div className={`p-3 rounded-lg ${selectedArtisan.is_online ? "bg-green-50" : "bg-red-50"}`}>
+                <p className={`text-xs mb-1 ${selectedArtisan.is_online ? "text-green-700" : "text-red-700"}`}>
+                  {lang === "EN" ? "Status" : "Statut"}
+                </p>
+                <p className={`text-sm font-semibold ${selectedArtisan.is_online ? "text-green-600" : "text-red-600"}`}>
+                  {selectedArtisan.is_online ? (lang === "EN" ? "Online" : "En ligne") : (lang === "EN" ? "Offline" : "Hors ligne")}
+                </p>
               </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <Briefcase size={16} className="text-green-600" />
-                  <p className="text-xs text-green-700">
-                    {lang === "EN" ? "Earnings" : "Gains"}
-                  </p>
-                </div>
-                <p className="text-2xl font-bold text-green-600">${selectedArtisan.jobsCompleted * 75}</p>
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Account Status" : "Statut du compte"}</p>
+                <p className={`text-sm font-semibold ${selectedArtisan.is_active ? "text-green-600" : "text-red-600"}`}>
+                  {selectedArtisan.is_active ? (lang === "EN" ? "Active" : "Actif") : (lang === "EN" ? "Inactive" : "Inactif")}
+                </p>
+              </div>
+              <div className={`p-3 rounded-lg border ${getVerificationStatusColor(selectedArtisan.verification_status)}`}>
+                <p className={`text-xs mb-1 ${getVerificationStatusColor(selectedArtisan.verification_status).split(" ")[1]}`}>
+                  {lang === "EN" ? "Verification" : "Vérification"}
+                </p>
+                <p className={`text-sm font-semibold`}>
+                  {getVerificationStatusLabel(selectedArtisan.verification_status)}
+                </p>
+              </div>
+              <div className="p-3 bg-yellow-50 rounded-lg">
+                <p className="text-xs text-yellow-700 mb-1">{lang === "EN" ? "Rating" : "Note"}</p>
+                <div><RatingStars rating={selectedArtisan.average_rating} /></div>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <p className="text-xs text-purple-700 mb-1">{lang === "EN" ? "Reviews" : "Avis"}</p>
+                <p className="text-sm font-semibold text-purple-600">{selectedArtisan.review_count}</p>
               </div>
             </div>
 
-            {/* Contact & Location */}
-            <div className="space-y-4">
+            {/* Bio */}
+            {selectedArtisan.bio && (
               <div>
-                <h4 className="text-sm font-semibold text-foreground mb-2">
-                  {lang === "EN" ? "Contact Information" : "Informations de contact"}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Email" : "Email"}</p>
-                    <p className="text-sm font-medium text-foreground">{selectedArtisan.email}</p>
-                  </div>
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Phone" : "Téléphone"}</p>
-                    <p className="text-sm font-medium text-foreground">{selectedArtisan.phone}</p>
-                  </div>
-                </div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">{lang === "EN" ? "Bio" : "Biographie"}</h4>
+                <p className="text-sm text-muted-foreground">{selectedArtisan.bio}</p>
               </div>
+            )}
 
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-2">
-                  {lang === "EN" ? "Location" : "Emplacement"}
-                </h4>
-                <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg">
-                  <MapPin size={16} className="text-muted-foreground" />
-                  <p className="text-sm text-foreground">{selectedArtisan.location}</p>
-                </div>
+            {/* Professional Info */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Experience" : "Expérience"}</p>
+                <p className="text-sm font-semibold text-foreground">{selectedArtisan.years_of_experience} {lang === "EN" ? "years" : "ans"}</p>
               </div>
-
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-2">
-                  {lang === "EN" ? "Verification Status" : "Statut de vérification"}
-                </h4>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-600 border border-blue-200">
-                    {lang === "EN" ? "Verified" : "Vérifié"}
-                  </span>
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-600 border border-green-200">
-                    {lang === "EN" ? "Background Check Passed" : "Vérification réussie"}
-                  </span>
-                </div>
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Hourly Rate" : "Tarif horaire"}</p>
+                <p className="text-sm font-semibold text-foreground">${selectedArtisan.hourly_rate}</p>
               </div>
-
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-2">
-                  {lang === "EN" ? "Recent Activity" : "Activité récente"}
-                </h4>
-                <p className="text-sm text-muted-foreground">
-                  {lang === "EN"
-                    ? "Completed 3 jobs in the last 7 days. Excellent performance and customer satisfaction."
-                    : "A terminé 3 emplois au cours des 7 derniers jours. Excellentes performances et satisfaction client."}
+              <div className={`p-3 rounded-lg ${selectedArtisan.is_available ? "bg-green-50" : "bg-red-50"}`}>
+                <p className={`text-xs mb-1 ${selectedArtisan.is_available ? "text-green-700" : "text-red-700"}`}>
+                  {lang === "EN" ? "Availability" : "Disponibilité"}
                 </p>
+                <p className={`text-sm font-semibold ${selectedArtisan.is_available ? "text-green-600" : "text-red-600"}`}>
+                  {selectedArtisan.is_available ? (lang === "EN" ? "Available" : "Disponible") : (lang === "EN" ? "Unavailable" : "Non disponible")}
+                </p>
+              </div>
+            </div>
+
+            {/* Skills */}
+            {selectedArtisan.skills && selectedArtisan.skills.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">{lang === "EN" ? "Skills" : "Compétences"}</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedArtisan.skills.map((skill, index) => (
+                    <span key={index} className="px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Service Areas */}
+            {selectedArtisan.service_areas && selectedArtisan.service_areas.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">{lang === "EN" ? "Service Areas" : "Zones de service"}</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedArtisan.service_areas.map((area, index) => (
+                    <span key={index} className="px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-600 border border-green-200">
+                      <MapPin size={12} className="inline mr-1" />
+                      {area}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Job Stats */}
+            <div>
+              <h4 className="text-sm font-semibold text-foreground mb-2">{lang === "EN" ? "Job Statistics" : "Statistiques d'emploi"}</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Total Orders" : "Commandes totales"}</p>
+                  <p className="text-lg font-bold text-foreground">{selectedArtisan.total_orders_count}</p>
+                </div>
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <p className="text-xs text-green-700 mb-1">{lang === "EN" ? "Completed" : "Complétées"}</p>
+                  <p className="text-lg font-bold text-green-600">{selectedArtisan.completed_orders_count}</p>
+                </div>
+                <div className="p-3 bg-red-50 rounded-lg">
+                  <p className="text-xs text-red-700 mb-1">{lang === "EN" ? "Cancelled" : "Annulées"}</p>
+                  <p className="text-lg font-bold text-red-600">{selectedArtisan.cancelled_orders_count}</p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <p className="text-xs text-blue-700 mb-1">{lang === "EN" ? "Total Earnings" : "Revenus totaux"}</p>
+                  <p className="text-lg font-bold text-blue-600">${selectedArtisan.total_earnings}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Member Info */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Member Since" : "Membre depuis"}</p>
+                <p className="text-sm font-semibold text-foreground">{new Date(selectedArtisan.joined_at).toLocaleDateString()}</p>
+              </div>
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">{lang === "EN" ? "Date of Birth" : "Date de naissance"}</p>
+                <p className="text-sm font-semibold text-foreground">{selectedArtisan.birth_date ? new Date(selectedArtisan.birth_date).toLocaleDateString() : "N/A"}</p>
+              </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <h4 className="text-sm font-semibold text-foreground mb-2">{lang === "EN" ? "Location" : "Emplacement"}</h4>
+              <p className="text-sm text-muted-foreground">
+                {selectedArtisan.location
+                  ? `${selectedArtisan.location.address_line}, ${selectedArtisan.location.city}, ${selectedArtisan.location.state}, ${selectedArtisan.location.zip_code}, ${selectedArtisan.location.country}`
+                  : "N/A"}
+              </p>
+            </div>
+
+            {/* Booking History */}
+            <div>
+              <h4 className="text-sm font-semibold text-foreground mb-2">{lang === "EN" ? "Recent Bookings" : "Réservations récentes"}</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border border-border rounded-lg">
+                  <thead className="bg-muted/20">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Date" : "Date"}</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Service" : "Service"}</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Client" : "Client"}</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Status" : "Statut"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedArtisan.booking_history?.map((booking, index) => (
+                      <tr key={index} className="border-t border-border">
+                        <td className="px-3 py-2 text-sm">{new Date(booking.scheduled_date).toLocaleDateString()}</td>
+                        <td className="px-3 py-2 text-sm">{booking.service_name}</td>
+                        <td className="px-3 py-2 text-sm">{booking.client_name}</td>
+                        <td className="px-3 py-2 text-sm">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            booking.status === 'completed' ? 'bg-green-50 text-green-600' :
+                            booking.status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                            booking.status === 'requested' ? 'bg-yellow-50 text-yellow-600' :
+                            'bg-blue-50 text-blue-600'
+                          }`}>
+                            {booking.status}
+                          </span>
+                        </td>
+                      </tr>
+                    )) || (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-4 text-center text-sm text-muted-foreground">
+                          {lang === "EN" ? "No bookings available" : "Aucune réservation disponible"}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Deactivate Confirmation Modal */}
+
+      {/* Toggle Active Confirmation Modal */}
       {deactivateArtisan && (
         <ConfirmModal
           isOpen={!!deactivateArtisan}
           onClose={() => setDeactivateArtisan(null)}
-          onConfirm={() => {
-            console.log("Deactivating artisan:", deactivateArtisan.id);
+          onConfirm={async () => {
+            try {
+              setToggling(true);
+              await toggleUserActive(deactivateArtisan.id);
+              setDeactivateArtisan(null);
+              fetchArtisans();
+            } catch (err) {
+              console.error("Failed to toggle user active:", err);
+            } finally {
+              setToggling(false);
+            }
           }}
-          title={lang === "EN" ? "Deactivate Artisan" : "Désactiver l'artisan"}
+          title={deactivateArtisan.is_active ? (lang === "EN" ? "Deactivate Artisan" : "Désactiver l'artisan") : (lang === "EN" ? "Activate Artisan" : "Activer l'artisan")}
           message={
-            lang === "EN"
-              ? `Are you sure you want to deactivate ${deactivateArtisan.name}? They will not be able to accept new jobs.`
-              : `Êtes-vous sûr de vouloir désactiver ${deactivateArtisan.name}? Ils ne pourront plus accepter de nouveaux emplois.`
+            deactivateArtisan.is_active
+              ? (lang === "EN"
+                  ? `Are you sure you want to deactivate ${deactivateArtisan.full_name}? They will not be able to accept new bookings.`
+                  : `Êtes-vous sûr de vouloir désactiver ${deactivateArtisan.full_name}? Ils ne pourront plus accepter de nouvelles réservations.`)
+              : (lang === "EN"
+                  ? `Are you sure you want to activate ${deactivateArtisan.full_name}? They will be able to accept new bookings again.`
+                  : `Êtes-vous sûr de vouloir activer ${deactivateArtisan.full_name}? Ils pourront à nouveau accepter de nouvelles réservations.`)
           }
-          confirmText={lang === "EN" ? "Deactivate" : "Désactiver"}
+          confirmText={deactivateArtisan.is_active ? (lang === "EN" ? "Deactivate" : "Désactiver") : (lang === "EN" ? "Activate" : "Activer")}
           cancelText={lang === "EN" ? "Cancel" : "Annuler"}
-          type="warning"
+          type={deactivateArtisan.is_active ? "warning" : "success"}
+          loading={toggling}
         />
       )}
 
@@ -501,18 +669,28 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
         <ConfirmModal
           isOpen={!!deleteArtisan}
           onClose={() => setDeleteArtisan(null)}
-          onConfirm={() => {
-            console.log("Deleting artisan:", deleteArtisan.id);
+          onConfirm={async () => {
+            try {
+              setDeleting(true);
+              await deleteUser(deleteArtisan.id);
+              setDeleteArtisan(null);
+              fetchArtisans();
+            } catch (err) {
+              console.error("Failed to delete user:", err);
+            } finally {
+              setDeleting(false);
+            }
           }}
           title={lang === "EN" ? "Delete Artisan" : "Supprimer l'artisan"}
           message={
             lang === "EN"
-              ? `Are you sure you want to permanently delete ${deleteArtisan.name}? This action cannot be undone and all artisan data will be lost.`
-              : `Êtes-vous sûr de vouloir supprimer définitivement ${deleteArtisan.name}? Cette action est irréversible et toutes les données de l'artisan seront perdues.`
+              ? `Are you sure you want to permanently delete ${deleteArtisan.full_name}? This action cannot be undone and all artisan data will be lost.`
+              : `Êtes-vous sûr de vouloir supprimer définitivement ${deleteArtisan.full_name}? Cette action est irréversible et toutes les données de l'artisan seront perdues.`
           }
           confirmText={lang === "EN" ? "Delete Permanently" : "Supprimer définitivement"}
           cancelText={lang === "EN" ? "Cancel" : "Annuler"}
           type="danger"
+          loading={deleting}
         />
       )}
     </main>
