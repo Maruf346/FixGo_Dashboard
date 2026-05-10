@@ -28,9 +28,12 @@ export default function RichTextPage({ lang, title, onBack, getContent, patchCon
     cancel: lang === "EN" ? "Cancel" : "Annuler",
     save: lang === "EN" ? "Save" : "Enregistrer",
     loading: lang === "EN" ? "Loading content..." : "Chargement du contenu...",
+    loadFailed: lang === "EN" ? "Unable to load content." : "Impossible de charger le contenu.",
     empty: lang === "EN" ? "No content yet. Click Edit to add content." : "Aucun contenu pour le moment. Cliquez sur Modifier pour ajouter du contenu.",
     saved: lang === "EN" ? "Content saved successfully." : "Contenu enregistré avec succès.",
     saveFailed: lang === "EN" ? "Unable to save changes. Please try again." : "Impossible d'enregistrer les modifications. Veuillez réessayer.",
+    drawerTitle: lang === "EN" ? "Edit Content" : "Modifier le contenu",
+    lastUpdated: lang === "EN" ? "Last updated:" : "Dernière mise à jour :",
   };
 
   useEffect(() => {
@@ -44,8 +47,8 @@ export default function RichTextPage({ lang, title, onBack, getContent, patchCon
         setDraft(response.content ?? "");
         setUpdatedAt(response.updated_at ?? null);
       } catch (err) {
-        const message = err instanceof Error ? err.message : t.loadError;
-        setError(message || t.loadError);
+        const message = err instanceof Error ? err.message : t.loadFailed;
+        setError(message || t.loadFailed);
         console.error("Failed to load rich content:", err);
       } finally {
         setLoading(false);
@@ -117,7 +120,7 @@ export default function RichTextPage({ lang, title, onBack, getContent, patchCon
             <button
               type="button"
               onClick={handleEdit}
-              className="px-4 py-2 rounded-lg border border-white/30 text-white text-sm font-medium hover:bg-white/10 transition-colors"
+              className="px-4 py-2 rounded-lg border border-white/30 bg-white/10 text-white text-sm font-medium hover:bg-white/20 transition-colors"
             >
               {t.edit}
             </button>
@@ -143,37 +146,36 @@ export default function RichTextPage({ lang, title, onBack, getContent, patchCon
             </div>
           )}
 
-          {!editing ? (
-            <div className="bg-white rounded-2xl border border-border p-6 min-h-[320px]">
-              {content ? (
+          <div className="bg-white rounded-2xl border border-border p-6 min-h-[320px]">
+            {!editing ? (
+              content ? (
                 <div className="prose prose-slate max-w-none" dangerouslySetInnerHTML={{ __html: content }} />
               ) : (
                 <p className="text-muted-foreground">{t.empty}</p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <RichTextEditor value={draft} onChange={setDraft} />
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="px-5 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={handleSave}
-                  className="px-5 py-2 rounded-lg text-sm font-medium text-white transition-colors shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)" }}
-                >
-                  {saving ? `${t.save}...` : t.save}
-                </button>
+              )
+            ) : (
+              <div className="space-y-4">
+                <RichTextEditor value={draft} onChange={setDraft} />
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="w-full sm:w-auto rounded-lg border border-border px-5 py-3 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="w-full sm:w-auto rounded-lg bg-gradient-to-r from-[#1b457c] to-[#5286ca] px-5 py-3 text-sm font-medium text-white shadow-sm shadow-[#1b457c]/20 hover:opacity-95 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? `${t.save}...` : t.save}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </main>

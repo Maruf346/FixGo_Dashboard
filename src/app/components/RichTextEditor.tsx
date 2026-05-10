@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
-import { ClassicEditor } from "ckeditor5";
+import ClassicEditor from "@ckeditor/ckeditor5-build-classic";
 
 const STYLES = `
 .ck-editor-wrap .ck.ck-toolbar {
@@ -28,7 +28,7 @@ const STYLES = `
 .ck-editor-wrap .ck-editor__main > .ck-editor__editable:focus {
   box-shadow: 0 0 0 3px rgba(245, 73, 0, 0.1) !important;
 }
-`; 
+`;
 let stylesInjected = false;
 
 function injectStyles() {
