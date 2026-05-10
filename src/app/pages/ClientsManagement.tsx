@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   ArrowUpDown,
@@ -9,51 +9,21 @@ import {
   Eye,
   UserX,
   Trash2,
+  UserCheck,
 } from "lucide-react";
 import { Modal, ConfirmModal } from "../components/Modal";
 import { ActionMenu } from "../components/ActionMenu";
+import { getClients, getClientDetail, toggleUserActive, deleteUser, Client, ClientDetail } from "../../services/clients";
 
 type Language = "EN" | "FR";
-type SortKey = "name" | "totalOrders" | "completed" | "cancelled";
+type SortKey = "full_name" | "total_orders_count" | "completed_orders_count" | "cancelled_orders_count";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE_OPTIONS = [8, 16, 20];
 
-interface Client {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  totalOrders: number;
-  completed: number;
-  cancelled: number;
-  location: string;
-  avatar: string;
-  memberSince: string;
+interface ClientWithLocation extends Client {
+  locationDisplay: string;
 }
-
-const MOCK_CLIENTS: Client[] = [
-  { id: "c1",  name: "Justin Leo",    email: "alexsmith@gmail.com",    phone: "+1 887 049 8937", totalOrders: 50, completed: 40, cancelled: 10, location: "Montreal, Quebec",      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&auto=format", memberSince: "Jan 2022" },
-  { id: "c2",  name: "Sarah Miller",  email: "sarah.miller@gmail.com", phone: "+1 514 223 4567", totalOrders: 32, completed: 28, cancelled: 4,  location: "Toronto, ON",           avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=40&h=40&fit=crop&auto=format", memberSince: "Feb 2022" },
-  { id: "c3",  name: "Maria Costa",   email: "maria.costa@gmail.com",  phone: "+1 416 789 1234", totalOrders: 45, completed: 38, cancelled: 7,  location: "Vancouver, BC",         avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=40&h=40&fit=crop&auto=format", memberSince: "Mar 2022" },
-  { id: "c4",  name: "David Chen",    email: "david.chen@gmail.com",   phone: "+1 604 567 8901", totalOrders: 28, completed: 25, cancelled: 3,  location: "Calgary, AB",           avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=40&h=40&fit=crop&auto=format", memberSince: "Jan 2022" },
-  { id: "c5",  name: "Lena Dubois",   email: "lena.dubois@gmail.com",  phone: "+1 403 234 5678", totalOrders: 55, completed: 48, cancelled: 7,  location: "Ottawa, ON",            avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=40&h=40&fit=crop&auto=format", memberSince: "Apr 2022" },
-  { id: "c6",  name: "Omar Hassan",   email: "omar.hassan@gmail.com",  phone: "+1 613 456 7890", totalOrders: 22, completed: 20, cancelled: 2,  location: "Edmonton, AB",          avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=40&h=40&fit=crop&auto=format", memberSince: "Feb 2022" },
-  { id: "c7",  name: "Priya Nair",    email: "priya.nair@gmail.com",   phone: "+1 780 123 4567", totalOrders: 38, completed: 32, cancelled: 6,  location: "Winnipeg, MB",          avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=40&h=40&fit=crop&auto=format", memberSince: "Mar 2022" },
-  { id: "c8",  name: "Jean Moreau",   email: "jean.moreau@gmail.com",  phone: "+1 204 890 1234", totalOrders: 42, completed: 36, cancelled: 6,  location: "Quebec City, QC",       avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&auto=format", memberSince: "Jan 2022" },
-  { id: "c9",  name: "Emma Schulz",   email: "emma.schulz@gmail.com",  phone: "+1 418 567 8901", totalOrders: 31, completed: 27, cancelled: 4,  location: "Halifax, NS",           avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=40&h=40&fit=crop&auto=format", memberSince: "Apr 2022" },
-  { id: "c10", name: "Kevin Trần",    email: "kevin.tran@gmail.com",   phone: "+1 902 234 5678", totalOrders: 26, completed: 22, cancelled: 4,  location: "Victoria, BC",          avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&auto=format", memberSince: "Feb 2022" },
-  { id: "c11", name: "Chloé Martin",  email: "chloe.martin@gmail.com", phone: "+1 250 456 7890", totalOrders: 48, completed: 42, cancelled: 6,  location: "Saskatoon, SK",         avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=40&h=40&fit=crop&auto=format", memberSince: "Mar 2022" },
-  { id: "c12", name: "Ravi Patel",    email: "ravi.patel@gmail.com",   phone: "+1 306 123 4567", totalOrders: 35, completed: 30, cancelled: 5,  location: "Regina, SK",            avatar: "https://images.unsplash.com/photo-1552058544-f2b08422138a?w=40&h=40&fit=crop&auto=format", memberSince: "Jan 2022" },
-  { id: "c13", name: "Nina Wolf",     email: "nina.wolf@gmail.com",    phone: "+1 306 890 1234", totalOrders: 29, completed: 26, cancelled: 3,  location: "St. John's, NL",        avatar: "https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=40&h=40&fit=crop&auto=format", memberSince: "Apr 2022" },
-  { id: "c14", name: "Lucas Kim",     email: "lucas.kim@gmail.com",    phone: "+1 709 567 8901", totalOrders: 52, completed: 46, cancelled: 6,  location: "Charlottetown, PE",     avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=40&h=40&fit=crop&auto=format", memberSince: "Feb 2022" },
-  { id: "c15", name: "Amira Benali",  email: "amira.benali@gmail.com", phone: "+1 902 234 5678", totalOrders: 41, completed: 36, cancelled: 5,  location: "Fredericton, NB",       avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=40&h=40&fit=crop&auto=format", memberSince: "Mar 2022" },
-  { id: "c16", name: "Ethan Brown",   email: "ethan.brown@gmail.com",  phone: "+1 506 456 7890", totalOrders: 33, completed: 29, cancelled: 4,  location: "Yellowknife, NT",       avatar: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=40&h=40&fit=crop&auto=format", memberSince: "Jan 2022" },
-  { id: "c17", name: "Sophie Blanc",  email: "sophie.blanc@gmail.com", phone: "+1 867 123 4567", totalOrders: 37, completed: 32, cancelled: 5,  location: "Whitehorse, YT",        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=40&h=40&fit=crop&auto=format", memberSince: "Apr 2022" },
-  { id: "c18", name: "Daniel Ortiz",  email: "daniel.ortiz@gmail.com", phone: "+1 867 890 1234", totalOrders: 44, completed: 38, cancelled: 6,  location: "Iqaluit, NU",           avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=40&h=40&fit=crop&auto=format", memberSince: "Feb 2022" },
-  { id: "c19", name: "Isabelle Roy",  email: "isabelle.roy@gmail.com", phone: "+1 867 567 8901", totalOrders: 46, completed: 40, cancelled: 6,  location: "Moncton, NB",           avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=40&h=40&fit=crop&auto=format", memberSince: "Mar 2022" },
-  { id: "c20", name: "Aaron Müller",  email: "aaron.muller@gmail.com", phone: "+1 506 234 5678", totalOrders: 39, completed: 34, cancelled: 5,  location: "Thunder Bay, ON",       avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=40&h=40&fit=crop&auto=format", memberSince: "Jan 2022" },
-];
 
 function AvatarImg({ src, name }: { src: string; name: string }) {
   return <img src={src} alt={name} className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0" />;
@@ -82,15 +52,64 @@ function EmptyState({ lang }: { lang: Language }) {
 }
 
 export default function ClientsManagement({ lang }: { lang: Language }) {
+  const [clients, setClients] = useState<ClientWithLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortKey, setSortKey] = useState<SortKey>("full_name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [deactivateClient, setDeactivateClient] = useState<Client | null>(null);
-  const [deleteClient, setDeleteClient] = useState<Client | null>(null);
+  const [selectedClient, setSelectedClient] = useState<ClientDetail | null>(null);
+  const [deactivateClient, setDeactivateClient] = useState<ClientWithLocation | null>(null);
+  const [deleteClient, setDeleteClient] = useState<ClientWithLocation | null>(null);
+  const [toggling, setToggling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const fetchClients = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const ordering = sortDir === "asc" ? sortKey : `-${sortKey}`;
+      const response = await getClients({
+        page,
+        page_size: pageSize,
+        search: search || undefined,
+        ordering,
+      });
+      const clientsWithLocation = response.results.map((client: Client) => ({
+        ...client,
+        locationDisplay: `${client.location.city || ""}, ${client.location.state || ""}, ${client.location.country || ""}`.replace(/^, |, $/, "").replace(/, , /g, ", "),
+      }));
+      setClients(clientsWithLocation);
+      setTotalCount(response.count);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch clients");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchClients();
+  }, [page, pageSize, sortKey, sortDir, search]);
+
+  const fetchClientDetail = async (clientId: string) => {
+    try {
+      const detail = await getClientDetail(clientId);
+      setSelectedClient(detail);
+    } catch (err) {
+      console.error("Failed to fetch client detail:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedClient && typeof selectedClient === 'object' && 'id' in selectedClient && !('booking_history' in selectedClient)) {
+      fetchClientDetail(selectedClient.id);
+    }
+  }, [selectedClient]);
 
   const t = {
     search:       lang === "EN" ? "Search clients by name, email, location…" : "Rechercher par nom, email, localisation…",
@@ -108,6 +127,7 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
     actions:      lang === "EN" ? "Actions" : "Actions",
     viewDetails:  lang === "EN" ? "View Details" : "Voir détails",
     deactivate:   lang === "EN" ? "Deactivate" : "Désactiver",
+    activate:     lang === "EN" ? "Activate" : "Activer",
     delete:       lang === "EN" ? "Delete" : "Supprimer",
   };
 
@@ -117,25 +137,9 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return MOCK_CLIENTS.filter(c =>
-      !q ||
-      c.name.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      c.location.toLowerCase().includes(q)
-    ).sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === "name") cmp = a.name.localeCompare(b.name);
-      else if (sortKey === "totalOrders") cmp = a.totalOrders - b.totalOrders;
-      else if (sortKey === "completed") cmp = a.completed - b.completed;
-      else if (sortKey === "cancelled") cmp = a.cancelled - b.cancelled;
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [search, sortKey, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const filtered = clients;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const paginated = clients;
 
   const pageNumbers = useMemo(() => {
     const pages: (number | "…")[] = [];
@@ -168,24 +172,50 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
           </div>
         </div>
 
+        {/* Loading state */}
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="ml-2 text-sm text-muted-foreground">
+              {lang === "EN" ? "Loading clients..." : "Chargement des clients..."}
+            </span>
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && !loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <p className="text-sm text-red-600 mb-2">{error}</p>
+              <button
+                onClick={fetchClients}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                {lang === "EN" ? "Try Again" : "Réessayer"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
+        {!loading && !error && (
+          <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/20">
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("name")}>
-                  {t.name}<SortIcon active={sortKey === "name"} dir={sortDir} />
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("full_name")}>
+                  {t.name}<SortIcon active={sortKey === "full_name"} dir={sortDir} />
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.email}</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.phone}</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("totalOrders")}>
-                  {t.totalOrders}<SortIcon active={sortKey === "totalOrders"} dir={sortDir} />
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("total_orders_count")}>
+                  {t.totalOrders}<SortIcon active={sortKey === "total_orders_count"} dir={sortDir} />
                 </th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("completed")}>
-                  {t.completed}<SortIcon active={sortKey === "completed"} dir={sortDir} />
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("completed_orders_count")}>
+                  {t.completed}<SortIcon active={sortKey === "completed_orders_count"} dir={sortDir} />
                 </th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("cancelled")}>
-                  {t.cancelled}<SortIcon active={sortKey === "cancelled"} dir={sortDir} />
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("cancelled_orders_count")}>
+                  {t.cancelled}<SortIcon active={sortKey === "cancelled_orders_count"} dir={sortDir} />
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.location}</th>
                 <th className="px-3 py-3">{t.actions}</th>
@@ -207,16 +237,16 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2 whitespace-nowrap">
-                        <AvatarImg src={c.avatar} name={c.name} />
-                        <span className="font-medium text-foreground">{c.name}</span>
+                        <AvatarImg src={c.avatar || ""} name={c.full_name} />
+                        <span className="font-medium text-foreground">{c.full_name}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3.5 text-muted-foreground">{c.email}</td>
                     <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{c.phone}</td>
-                    <td className="px-5 py-3.5 text-foreground">{c.totalOrders} {t.orders}</td>
-                    <td className="px-5 py-3.5 text-foreground">{c.completed} {t.completedTxt}</td>
-                    <td className="px-5 py-3.5 text-foreground">{c.cancelled} {t.cancelledTxt}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{c.location}</td>
+                    <td className="px-5 py-3.5 text-foreground">{c.total_orders_count} {t.orders}</td>
+                    <td className="px-5 py-3.5 text-foreground">{c.completed_orders_count} {t.completedTxt}</td>
+                    <td className="px-5 py-3.5 text-foreground">{c.cancelled_orders_count} {t.cancelledTxt}</td>
+                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{c.locationDisplay}</td>
                     <td className="px-3 py-3.5">
                       <ActionMenu
                         items={[
@@ -226,10 +256,10 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                             onClick: () => setSelectedClient(c),
                           },
                           {
-                            label: t.deactivate,
-                            icon: <UserX size={14} />,
+                            label: c.is_active ? t.deactivate : t.activate,
+                            icon: c.is_active ? <UserX size={14} /> : <UserCheck size={14} />,
                             onClick: () => setDeactivateClient(c),
-                            className: "text-orange-600",
+                            className: c.is_active ? "text-orange-600" : "text-green-600",
                           },
                           {
                             label: t.delete,
@@ -247,7 +277,10 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
           </table>
         </div>
 
+        )}
+
         {/* Mobile card list */}
+        {!loading && !error && (
         <div className="md:hidden divide-y divide-border">
           {paginated.length === 0 ? (
             <div className="px-5 py-16 text-center"><EmptyState lang={lang} /></div>
@@ -258,13 +291,11 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                 onClick={() => setSelectedClient(c)}
                 className="px-5 py-4 hover:bg-muted/40 transition-colors cursor-pointer"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <AvatarImg src={c.avatar} name={c.name} />
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{c.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{c.email}</p>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <AvatarImg src={c.avatar || ""} name={c.full_name} />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{c.full_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{c.email}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -274,25 +305,26 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.location}</p>
-                    <p className="text-xs text-foreground truncate">{c.location}</p>
+                    <p className="text-xs text-foreground truncate">{c.locationDisplay}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.totalOrders}</p>
-                    <p className="text-sm font-bold text-foreground">{c.totalOrders}</p>
+                    <p className="text-sm font-bold text-foreground">{c.total_orders_count}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.completed}</p>
-                    <p className="text-sm font-bold text-green-600">{c.completed}</p>
+                    <p className="text-sm font-bold text-green-600">{c.completed_orders_count}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.cancelled}</p>
-                    <p className="text-sm font-bold text-red-600">{c.cancelled}</p>
+                    <p className="text-sm font-bold text-red-600">{c.cancelled_orders_count}</p>
                   </div>
                 </div>
               </div>
             ))
           )}
         </div>
+        )}
 
         {/* Pagination */}
         {filtered.length > 0 && (
@@ -356,9 +388,9 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
           <div className="space-y-6">
             {/* Client Header */}
             <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
-              <img src={selectedClient.avatar} alt={selectedClient.name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
+              <img src={selectedClient.avatar || ""} alt={selectedClient.full_name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
               <div>
-                <h3 className="text-lg font-semibold text-foreground">{selectedClient.name}</h3>
+                <h3 className="text-lg font-semibold text-foreground">{selectedClient.full_name}</h3>
                 <p className="text-sm text-muted-foreground">{selectedClient.email}</p>
                 <p className="text-sm text-muted-foreground">{selectedClient.phone}</p>
               </div>
@@ -370,25 +402,25 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                 <p className="text-xs text-muted-foreground mb-1">
                   {lang === "EN" ? "Total Bookings" : "Réservations totales"}
                 </p>
-                <p className="text-2xl font-bold text-foreground">{selectedClient.totalOrders}</p>
+                <p className="text-2xl font-bold text-foreground">{selectedClient.total_orders_count}</p>
               </div>
               <div className="p-4 bg-green-50 rounded-lg">
                 <p className="text-xs text-green-700 mb-1">
                   {lang === "EN" ? "Completed" : "Complétées"}
                 </p>
-                <p className="text-2xl font-bold text-green-600">{selectedClient.completed}</p>
+                <p className="text-2xl font-bold text-green-600">{selectedClient.completed_orders_count}</p>
               </div>
               <div className="p-4 bg-red-50 rounded-lg">
                 <p className="text-xs text-red-700 mb-1">
                   {lang === "EN" ? "Cancelled" : "Annulées"}
                 </p>
-                <p className="text-2xl font-bold text-red-600">{selectedClient.cancelled}</p>
+                <p className="text-2xl font-bold text-red-600">{selectedClient.cancelled_orders_count}</p>
               </div>
               <div className="p-4 bg-blue-50 rounded-lg">
                 <p className="text-xs text-blue-700 mb-1">
                   {lang === "EN" ? "Member Since" : "Membre depuis"}
                 </p>
-                <p className="text-lg font-bold text-blue-600">{selectedClient.memberSince}</p>
+                <p className="text-lg font-bold text-blue-600">{new Date(selectedClient.created_at).toLocaleDateString()}</p>
               </div>
             </div>
 
@@ -398,50 +430,99 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                 <h4 className="text-sm font-semibold text-foreground mb-2">
                   {lang === "EN" ? "Location" : "Emplacement"}
                 </h4>
-                <p className="text-sm text-muted-foreground">{selectedClient.location}</p>
+                <p className="text-sm text-muted-foreground">{`${selectedClient.location.address_line}, ${selectedClient.location.city}, ${selectedClient.location.state}, ${selectedClient.location.country}`}</p>
               </div>
 
               <div>
                 <h4 className="text-sm font-semibold text-foreground mb-2">
                   {lang === "EN" ? "Current Status" : "Statut actuel"}
                 </h4>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-600 border border-green-200">
-                  {lang === "EN" ? "Active" : "Actif"}
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                  selectedClient.is_active
+                    ? "bg-green-50 text-green-600 border border-green-200"
+                    : "bg-red-50 text-red-600 border border-red-200"
+                }`}>
+                  {selectedClient.is_active ? (lang === "EN" ? "Active" : "Actif") : (lang === "EN" ? "Inactive" : "Inactif")}
                 </span>
               </div>
 
               <div>
                 <h4 className="text-sm font-semibold text-foreground mb-2">
-                  {lang === "EN" ? "Payment History" : "Historique des paiements"}
+                  {lang === "EN" ? "Booking History" : "Historique des réservations"}
                 </h4>
-                <p className="text-sm text-muted-foreground">
-                  {lang === "EN"
-                    ? "All payments completed on time. Excellent payment record."
-                    : "Tous les paiements effectués à temps. Excellent historique de paiement."}
-                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-border rounded-lg">
+                    <thead className="bg-muted/20">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Date" : "Date"}</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Service" : "Service"}</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Status" : "Statut"}</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase">{lang === "EN" ? "Amount" : "Montant"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedClient.booking_history?.map((booking, index) => (
+                        <tr key={index} className="border-t border-border">
+                          <td className="px-3 py-2 text-sm">{new Date(booking.scheduled_date).toLocaleDateString()}</td>
+                          <td className="px-3 py-2 text-sm">{booking.service_name}</td>
+                          <td className="px-3 py-2 text-sm">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              booking.status === 'completed' ? 'bg-green-50 text-green-600' :
+                              booking.status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                              'bg-yellow-50 text-yellow-600'
+                            }`}>
+                              {booking.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-sm font-medium">${booking.total_amount || 'N/A'}</td>
+                        </tr>
+                      )) || (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-4 text-center text-sm text-muted-foreground">
+                            {lang === "EN" ? "No booking history available" : "Aucun historique de réservation disponible"}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Deactivate Confirmation Modal */}
+      {/* Toggle Active Confirmation Modal */}
       {deactivateClient && (
         <ConfirmModal
           isOpen={!!deactivateClient}
           onClose={() => setDeactivateClient(null)}
-          onConfirm={() => {
-            console.log("Deactivating client:", deactivateClient.id);
+          onConfirm={async () => {
+            try {
+              setToggling(true);
+              await toggleUserActive(deactivateClient.id);
+              setDeactivateClient(null);
+              fetchClients(); // Refresh the list
+            } catch (err) {
+              console.error("Failed to toggle user active:", err);
+            } finally {
+              setToggling(false);
+            }
           }}
-          title={lang === "EN" ? "Deactivate Client" : "Désactiver le client"}
+          title={deactivateClient.is_active ? (lang === "EN" ? "Deactivate Client" : "Désactiver le client") : (lang === "EN" ? "Activate Client" : "Activer le client")}
           message={
-            lang === "EN"
-              ? `Are you sure you want to deactivate ${deactivateClient.name}? They will not be able to make new bookings.`
-              : `Êtes-vous sûr de vouloir désactiver ${deactivateClient.name}? Ils ne pourront plus effectuer de nouvelles réservations.`
+            deactivateClient.is_active
+              ? (lang === "EN"
+                  ? `Are you sure you want to deactivate ${deactivateClient.full_name}? They will not be able to make new bookings.`
+                  : `Êtes-vous sûr de vouloir désactiver ${deactivateClient.full_name}? Ils ne pourront plus effectuer de nouvelles réservations.`)
+              : (lang === "EN"
+                  ? `Are you sure you want to activate ${deactivateClient.full_name}? They will be able to make new bookings again.`
+                  : `Êtes-vous sûr de vouloir activer ${deactivateClient.full_name}? Ils pourront à nouveau effectuer de nouvelles réservations.`)
           }
-          confirmText={lang === "EN" ? "Deactivate" : "Désactiver"}
+          confirmText={deactivateClient.is_active ? (lang === "EN" ? "Deactivate" : "Désactiver") : (lang === "EN" ? "Activate" : "Activer")}
           cancelText={lang === "EN" ? "Cancel" : "Annuler"}
-          type="warning"
+          type={deactivateClient.is_active ? "warning" : "success"}
+          loading={toggling}
         />
       )}
 
@@ -450,18 +531,28 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
         <ConfirmModal
           isOpen={!!deleteClient}
           onClose={() => setDeleteClient(null)}
-          onConfirm={() => {
-            console.log("Deleting client:", deleteClient.id);
+          onConfirm={async () => {
+            try {
+              setDeleting(true);
+              await deleteUser(deleteClient.id);
+              setDeleteClient(null);
+              fetchClients(); // Refresh the list
+            } catch (err) {
+              console.error("Failed to delete user:", err);
+            } finally {
+              setDeleting(false);
+            }
           }}
           title={lang === "EN" ? "Delete Client" : "Supprimer le client"}
           message={
             lang === "EN"
-              ? `Are you sure you want to permanently delete ${deleteClient.name}? This action cannot be undone and all client data will be lost.`
-              : `Êtes-vous sûr de vouloir supprimer définitivement ${deleteClient.name}? Cette action est irréversible et toutes les données du client seront perdues.`
+              ? `Are you sure you want to permanently delete ${deleteClient.full_name}? This action cannot be undone and all client data will be lost.`
+              : `Êtes-vous sûr de vouloir supprimer définitivement ${deleteClient.full_name}? Cette action est irréversible et toutes les données du client seront perdues.`
           }
           confirmText={lang === "EN" ? "Delete Permanently" : "Supprimer définitivement"}
           cancelText={lang === "EN" ? "Cancel" : "Annuler"}
           type="danger"
+          loading={deleting}
         />
       )}
     </main>
