@@ -1,173 +1,204 @@
-import { useState } from "react";
-import { ArrowLeft, ChevronDown, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ChevronDown, Plus, Trash2, X } from "lucide-react";
+import { getFaqs, createFaq, deleteFaq, FaqItem } from "../../../services/support";
+import { loadStoredAuth } from "../../../services/auth";
 
 type Language = "EN" | "FR";
 
-interface FAQ {
-  id: string;
-  questionEN: string;
-  questionFR: string;
-  answerEN: string;
-  answerFR: string;
-}
-
-const INITIAL_FAQ_ITEMS: FAQ[] = [
-  {
-    id: "faq-1",
-    questionEN: "What is this app for?",
-    questionFR: "À quoi sert cette application ?",
-    answerEN: "This app is a private space for self-reflection and self-awareness. It invites you to slow down, look inward, and explore your thoughts and emotions through thoughtful questions.\n\nThere is no advice or judgment—only space to notice what feels present and reconnect with yourself at your own pace. You can return anytime and continue from wherever you are, without pressure or evaluation.",
-    answerFR: "Cette application est un espace privé pour l'auto-réflexion et la conscience de soi. Elle vous invite à ralentir, à regarder vers l'intérieur et à explorer vos pensées et vos émotions à travers des questions réfléchies.\n\nIl n'y a pas de conseil ou de jugement - seulement un espace pour remarquer ce qui se présente et vous reconnecter avec vous-même à votre propre rythme. Vous pouvez revenir à tout moment et continuer d'où vous êtes, sans pression ni évaluation."
-  },
-  {
-    id: "faq-2",
-    questionEN: "How does the conversation practice work?",
-    questionFR: "Comment fonctionne la pratique de conversation ?",
-    answerEN: "The experience guides you through open-ended questions that help you reflect on real-life situations and inner experiences. You respond in your own words, at your own pace, without advice or judgment. You can pause anytime and return later to continue from where you left off.",
-    answerFR: "L'expérience vous guide à travers des questions ouvertes qui vous aident à réfléchir sur des situations réelles et des expériences intérieures. Vous répondez avec vos propres mots, à votre propre rythme, sans conseil ni jugement. Vous pouvez faire une pause à tout moment et revenir plus tard pour continuer là où vous vous êtes arrêté."
-  },
-  {
-    id: "faq-3",
-    questionEN: "Will the conversations be the same every time?",
-    questionFR: "Les conversations seront-elles les mêmes à chaque fois ?",
-    answerEN: "No, each conversation is unique and adapts to your responses and current state of mind.",
-    answerFR: "Non, chaque conversation est unique et s'adapte à vos réponses et à votre état d'esprit actuel."
-  },
-  {
-    id: "faq-4",
-    questionEN: 'What is the "Create Your Own Scenario" feature?',
-    questionFR: 'Qu\'est-ce que la fonctionnalité "Créer votre propre scénario" ?',
-    answerEN: "This feature allows you to create custom reflection scenarios tailored to your specific needs and situations.",
-    answerFR: "Cette fonctionnalité vous permet de créer des scénarios de réflexion personnalisés adaptés à vos besoins et situations spécifiques."
-  }
-];
-
 export default function FAQs({ lang, onBack }: { lang: Language; onBack: () => void }) {
-  const [faqItems, setFaqItems] = useState<FAQ[]>(INITIAL_FAQ_ITEMS);
-  const [expandedItems, setExpandedItems] = useState<string[]>(["faq-1", "faq-2"]);
+  const [faqItems, setFaqItems] = useState<FaqItem[]>([]);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newQuestionEN, setNewQuestionEN] = useState("");
-  const [newQuestionFR, setNewQuestionFR] = useState("");
-  const [newAnswerEN, setNewAnswerEN] = useState("");
-  const [newAnswerFR, setNewAnswerFR] = useState("");
+  const [newQuestion, setNewQuestion] = useState("");
+  const [newAnswer, setNewAnswer] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const t = {
     title: lang === "EN" ? "FAQs" : "FAQ",
-    save: lang === "EN" ? "Save" : "Enregistrer",
     addFAQ: lang === "EN" ? "Add FAQ" : "Ajouter FAQ",
-    questionEN: lang === "EN" ? "Question (English)" : "Question (Anglais)",
-    questionFR: lang === "EN" ? "Question (French)" : "Question (Français)",
-    answerEN: lang === "EN" ? "Answer (English)" : "Réponse (Anglais)",
-    answerFR: lang === "EN" ? "Answer (French)" : "Réponse (Français)",
+    question: lang === "EN" ? "Question" : "Question",
+    answer: lang === "EN" ? "Answer" : "Réponse",
     cancel: lang === "EN" ? "Cancel" : "Annuler",
-    saveButton: lang === "EN" ? "Save FAQ" : "Enregistrer FAQ",
+    saveFAQ: lang === "EN" ? "Save FAQ" : "Enregistrer FAQ",
+    loading: lang === "EN" ? "Loading FAQs..." : "Chargement des FAQ...",
+    loadError: lang === "EN" ? "Unable to load FAQs." : "Impossible de charger les FAQ.",
+    empty: lang === "EN" ? "No FAQs available yet." : "Aucune FAQ disponible pour le moment.",
+    required: lang === "EN" ? "Question and answer are required." : "La question et la réponse sont requises.",
+    deleteConfirm: lang === "EN" ? "Delete FAQ" : "Supprimer la FAQ",
+    deleteError: lang === "EN" ? "Unable to delete FAQ." : "Impossible de supprimer la FAQ.",
+    createError: lang === "EN" ? "Unable to create FAQ." : "Impossible de créer la FAQ.",
+    created: lang === "EN" ? "FAQ created successfully." : "FAQ créée avec succès.",
+    deleted: lang === "EN" ? "FAQ deleted successfully." : "FAQ supprimée avec succès.",
   };
 
+  useEffect(() => {
+    const loadFaqs = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const { accessToken } = loadStoredAuth();
+        const response = await getFaqs(accessToken ?? undefined);
+        setFaqItems(response.results);
+      } catch (err) {
+        console.error(err);
+        setError(t.loadError);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadFaqs();
+  }, [lang]);
+
   const toggleItem = (id: string) => {
-    setExpandedItems(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    setExpandedItems((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
 
-  const handleAddFAQ = () => {
-    if (!newQuestionEN.trim() || !newAnswerEN.trim()) {
-      alert(lang === "EN" ? "Please fill in at least the English question and answer" : "Veuillez remplir au moins la question et la réponse en anglais");
+  const handleCreateFaq = async () => {
+    if (!newQuestion.trim() || !newAnswer.trim()) {
+      setModalError(t.required);
       return;
     }
 
-    const newFAQ: FAQ = {
-      id: `faq-${Date.now()}`,
-      questionEN: newQuestionEN,
-      questionFR: newQuestionFR || newQuestionEN,
-      answerEN: newAnswerEN,
-      answerFR: newAnswerFR || newAnswerEN,
-    };
+    setSaving(true);
+    setModalError(null);
 
-    setFaqItems([...faqItems, newFAQ]);
-    setNewQuestionEN("");
-    setNewQuestionFR("");
-    setNewAnswerEN("");
-    setNewAnswerFR("");
-    setShowAddModal(false);
+    try {
+      const { accessToken } = loadStoredAuth();
+      if (!accessToken) throw new Error("Authentication required.");
+
+      const createdFaq = await createFaq(accessToken, newQuestion.trim(), newAnswer.trim());
+      setFaqItems((prev) => [createdFaq, ...prev]);
+      setExpandedItems((prev) => [createdFaq.id, ...prev]);
+      setNewQuestion("");
+      setNewAnswer("");
+      setShowAddModal(false);
+      setSuccessMessage(t.created);
+      window.setTimeout(() => setSuccessMessage(null), 2500);
+    } catch (err) {
+      console.error(err);
+      setModalError(t.createError);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSaveAll = () => {
-    // Handle save all FAQs logic here
-    console.log("Saving all FAQs:", faqItems);
+  const handleDeleteFaq = async (id: string) => {
+    const confirmDelete = window.confirm(lang === "EN" ? "Are you sure you want to delete this FAQ?" : "Êtes-vous sûr de vouloir supprimer cette FAQ ?");
+    if (!confirmDelete) return;
+
+    setDeletingId(id);
+
+    try {
+      const { accessToken } = loadStoredAuth();
+      if (!accessToken) throw new Error("Authentication required.");
+      await deleteFaq(accessToken, id);
+      setFaqItems((prev) => prev.filter((item) => item.id !== id));
+      setExpandedItems((prev) => prev.filter((item) => item !== id));
+      setSuccessMessage(t.deleted);
+      window.setTimeout(() => setSuccessMessage(null), 2500);
+    } catch (err) {
+      console.error(err);
+      setError(t.deleteError);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
     <>
       <main className="flex-1 overflow-y-auto p-4 lg:p-6">
         <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden max-w-5xl mx-auto">
-          {/* Header */}
           <div className="px-6 py-4 text-white flex items-center justify-between" style={{ background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)" }}>
             <div className="flex items-center gap-3">
-              <button
-                onClick={onBack}
-                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-              >
+              <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
                 <ArrowLeft size={20} />
               </button>
               <h1 className="text-xl font-semibold">{t.title}</h1>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <Plus size={16} />
-                {t.addFAQ}
-              </button>
-              <button
-                onClick={handleSaveAll}
-                className="px-6 py-2 bg-white text-primary rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
-              >
-                {t.save}
-              </button>
-            </div>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <Plus size={16} />
+              {t.addFAQ}
+            </button>
           </div>
 
-          {/* FAQ Content */}
           <div className="p-6 lg:p-8">
-            <div className="bg-white rounded-lg border border-border overflow-hidden">
-              {/* FAQ Items */}
-              <div className="divide-y divide-[rgba(0,0,0,0.4)]">
-                {faqItems.map((faq) => {
-                  const isExpanded = expandedItems.includes(faq.id);
-                  const question = lang === "EN" ? faq.questionEN : faq.questionFR;
-                  const answer = lang === "EN" ? faq.answerEN : faq.answerFR;
-
-                  return (
-                    <div key={faq.id}>
-                      <button
-                        onClick={() => toggleItem(faq.id)}
-                        className="w-full px-5 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors"
-                      >
-                        <p className="font-['Poppins',sans-serif] font-medium text-[16px] text-[#6c7a92] text-left">
-                          {question}
-                        </p>
-                        <div className={`flex items-center justify-center transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                          <ChevronDown size={24} className="text-[#6c7a92]" />
+            {loading ? (
+              <p className="text-muted-foreground">{t.loading}</p>
+            ) : error ? (
+              <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+            ) : faqItems.length === 0 ? (
+              <div className="rounded-2xl bg-white border border-border p-6 text-center text-muted-foreground">{t.empty}</div>
+            ) : (
+              <div className="bg-white rounded-lg border border-border overflow-hidden">
+                <div className="divide-y divide-[rgba(0,0,0,0.08)]">
+                  {faqItems.map((faq) => {
+                    const isExpanded = expandedItems.includes(faq.id);
+                    return (
+                      <div key={faq.id}>
+                        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between bg-white hover:bg-muted/20 transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => toggleItem(faq.id)}
+                            className="text-left flex-1"
+                          >
+                            <p className="font-['Poppins',sans-serif] font-semibold text-[16px] text-[#1f2937]">
+                              {faq.question}
+                            </p>
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFaq(faq.id)}
+                              disabled={deletingId === faq.id}
+                              className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={t.deleteConfirm}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleItem(faq.id)}
+                              className={`p-2 rounded-lg text-[#6c7a92] hover:bg-muted/20 transition-colors ${isExpanded ? "rotate-180" : ""}`}
+                            >
+                              <ChevronDown size={20} />
+                            </button>
+                          </div>
                         </div>
-                      </button>
-                      {isExpanded && (
-                        <div className="px-5 pb-3">
-                          <p className="font-['Poppins',sans-serif] font-normal text-[14px] text-[#6c7a92] leading-[1.6] whitespace-pre-line">
-                            {answer}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        {isExpanded && (
+                          <div className="px-5 pb-4">
+                            <p className="font-['Poppins',sans-serif] text-[14px] text-[#6c7a92] leading-[1.8] whitespace-pre-line">
+                              {faq.answer}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
+
+            {successMessage && (
+              <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+                {successMessage}
+              </div>
+            )}
           </div>
         </div>
       </main>
 
-      {/* Add FAQ Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -176,10 +207,9 @@ export default function FAQs({ lang, onBack }: { lang: Language; onBack: () => v
               <button
                 onClick={() => {
                   setShowAddModal(false);
-                  setNewQuestionEN("");
-                  setNewQuestionFR("");
-                  setNewAnswerEN("");
-                  setNewAnswerFR("");
+                  setModalError(null);
+                  setNewQuestion("");
+                  setNewAnswer("");
                 }}
                 className="p-1.5 rounded-lg hover:bg-muted transition-colors"
               >
@@ -188,82 +218,55 @@ export default function FAQs({ lang, onBack }: { lang: Language; onBack: () => v
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Question EN */}
+              {modalError && (
+                <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                  {modalError}
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {t.questionEN} <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t.question}</label>
                 <input
                   type="text"
-                  value={newQuestionEN}
-                  onChange={(e) => setNewQuestionEN(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="Enter question in English"
+                  value={newQuestion}
+                  onChange={(e) => setNewQuestion(e.target.value)}
+                  className="w-full px-4 py-3 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  placeholder={lang === "EN" ? "Enter question" : "Entrez la question"}
                 />
               </div>
 
-              {/* Question FR */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {t.questionFR}
-                </label>
-                <input
-                  type="text"
-                  value={newQuestionFR}
-                  onChange={(e) => setNewQuestionFR(e.target.value)}
-                  className="w-full px-4 py-2 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="Enter question in French (optional)"
-                />
-              </div>
-
-              {/* Answer EN */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {t.answerEN} <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t.answer}</label>
                 <textarea
-                  value={newAnswerEN}
-                  onChange={(e) => setNewAnswerEN(e.target.value)}
-                  rows={5}
-                  className="w-full px-4 py-2 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                  placeholder="Enter answer in English"
+                  value={newAnswer}
+                  onChange={(e) => setNewAnswer(e.target.value)}
+                  rows={6}
+                  className="w-full px-4 py-3 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                  placeholder={lang === "EN" ? "Enter answer" : "Entrez la réponse"}
                 />
               </div>
 
-              {/* Answer FR */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {t.answerFR}
-                </label>
-                <textarea
-                  value={newAnswerFR}
-                  onChange={(e) => setNewAnswerFR(e.target.value)}
-                  rows={5}
-                  className="w-full px-4 py-2 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                  placeholder="Enter answer in French (optional)"
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4">
                 <button
+                  type="button"
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewQuestionEN("");
-                    setNewQuestionFR("");
-                    setNewAnswerEN("");
-                    setNewAnswerFR("");
+                    setModalError(null);
+                    setNewQuestion("");
+                    setNewAnswer("");
                   }}
                   className="px-6 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
                   {t.cancel}
                 </button>
                 <button
-                  onClick={handleAddFAQ}
-                  className="px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors shadow-sm hover:opacity-90"
+                  type="button"
+                  onClick={handleCreateFaq}
+                  disabled={saving}
+                  className="px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)" }}
                 >
-                  {t.saveButton}
+                  {saving ? (lang === "EN" ? "Saving..." : "Enregistrement...") : t.saveFAQ}
                 </button>
               </div>
             </div>
