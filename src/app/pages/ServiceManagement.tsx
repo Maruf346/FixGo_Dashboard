@@ -27,56 +27,20 @@ import {
   CategoryItem,
   CategoryStats,
 } from "../../services/categories";
+import {
+  getServices,
+  getServiceDetail,
+  createService,
+  updateService,
+  deleteService,
+  ServiceItem,
+} from "../../services/services";
 
 type Language = "EN" | "FR";
 
 type Category = CategoryItem;
 
-interface Service {
-  id: string;
-  name: string;
-  category: string;
-  categoryName: string;
-  priceMin: number;
-  priceMax: number;
-  completionTime: string;
-  priority: "Normal" | "Urgent";
-  description: string;
-  icon: string;
-  coverImage: string;
-  is_active: boolean;
-  assignedArtisans: number;
-  activeBookings: number;
-  estimatedDuration: string;
-}
-
-const SERVICE_IMAGES = [
-  "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=40&h=40&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=40&h=40&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=40&h=40&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=40&h=40&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1581094271901-8022df4466f9?w=40&h=40&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=40&h=40&fit=crop&auto=format",
-];
-
-// Generate more services for pagination demo with proper image URLs
-const MOCK_SERVICES: Service[] = Array.from({ length: 25 }, (_, i) => ({
-  id: `s${i + 1}`,
-  name: i === 0 ? "Pipe Repair" : i === 1 ? "Electrical Wiring" : i === 2 ? "Kitchen Cabinet" : i === 3 ? "Wall Painting" : i === 4 ? "AC Installation" : `Service ${i + 1}`,
-  category: `cat${(i % 6) + 1}`,
-  categoryName: i % 6 === 0 ? "Plumbing" : i % 6 === 1 ? "Electrical" : i % 6 === 2 ? "Carpentry" : i % 6 === 3 ? "Painting" : i % 6 === 4 ? "HVAC" : "Cleaning",
-  priceMin: 40 + (i % 5) * 10,
-  priceMax: 80 + (i % 5) * 20,
-  completionTime: `${1 + (i % 4)} hour${i % 4 > 0 ? 's' : ''}`,
-  priority: i % 2 === 0 ? "Urgent" : "Normal",
-  description: "Professional service with experienced technicians",
-  icon: SERVICE_IMAGES[i % SERVICE_IMAGES.length],
-  coverImage: SERVICE_IMAGES[i % SERVICE_IMAGES.length],
-  is_active: Math.random() > 0.3,
-  assignedArtisans: Math.floor(Math.random() * 15) + 3,
-  activeBookings: Math.floor(Math.random() * 30) + 5,
-  estimatedDuration: `${1 + (i % 4)} hour${i % 4 > 0 ? 's' : ''}`,
-}));
+type Service = ServiceItem;
 
 function StatusBadge({ status }: { status: boolean }) {
   return (
@@ -108,6 +72,11 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
   // Pagination for services
   const [servicePage, setServicePage] = useState(1);
   const [servicePageSize, setServicePageSize] = useState(8);
+  const [services, setServices] = useState<Service[]>([]);
+  const [servicesCount, setServicesCount] = useState(0);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [servicesError, setServicesError] = useState<string | null>(null);
+  const [selectedServiceLoading, setSelectedServiceLoading] = useState(false);
 
   const t = {
     title: lang === "EN" ? "Service Management" : "Gestion des services",
@@ -176,17 +145,39 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
     loadCategories();
   }, [categoryPage, categoryPageSize, search]);
 
-  // Filter and paginate services
-  const filteredServices = useMemo(() => {
-    const q = search.toLowerCase();
-    return MOCK_SERVICES.filter(s => !q || s.name.toLowerCase().includes(q) || s.categoryName.toLowerCase().includes(q));
-  }, [search]);
+  useEffect(() => {
+    const loadServices = async () => {
+      setServicesLoading(true);
+      setServicesError(null);
+      try {
+        const data = await getServices({ page: servicePage, page_size: servicePageSize, search: search.trim() || undefined });
+        setServices(data.results);
+        setServicesCount(data.count);
+      } catch (error) {
+        setServicesError("Unable to load services. Please try again.");
+      } finally {
+        setServicesLoading(false);
+      }
+    };
+    loadServices();
+  }, [servicePage, servicePageSize, search]);
 
-  const totalServicePages = Math.max(1, Math.ceil(filteredServices.length / servicePageSize));
-  const paginatedServices = filteredServices.slice(
-    (servicePage - 1) * servicePageSize,
-    servicePage * servicePageSize
-  );
+  const refreshServices = async (page = servicePage, pageSize = servicePageSize, searchTerm = search.trim() || undefined) => {
+    setServicesLoading(true);
+    setServicesError(null);
+    try {
+      const data = await getServices({ page, page_size: pageSize, search: searchTerm });
+      setServices(data.results);
+      setServicesCount(data.count);
+      setServicePage(page);
+    } catch (error) {
+      setServicesError("Unable to load services. Please try again.");
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+
+  const totalServicePages = Math.max(1, Math.ceil(servicesCount / servicePageSize));
 
   const servicePageNumbers = useMemo(() => {
     const pages: (number | "…")[] = [];
@@ -221,9 +212,22 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
   };
 
   const handleEditService = (id: string) => {
-    const service = MOCK_SERVICES.find((s) => s.id === id);
+    const service = services.find((s) => s.id === id);
     if (service) {
       setEditingService(service);
+    }
+  };
+
+  const handleViewServiceDetail = async (id: string) => {
+    setSelectedServiceLoading(true);
+    setSelectedService(null);
+    try {
+      const detail = await getServiceDetail(id);
+      setSelectedService(detail);
+    } catch (error) {
+      console.error("Failed to load service details", error);
+    } finally {
+      setSelectedServiceLoading(false);
     }
   };
 
@@ -476,20 +480,37 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedServices.map((service) => (
+                      {servicesLoading ? (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">Loading services...</td>
+                        </tr>
+                      ) : servicesError ? (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-10 text-center text-sm text-red-600">{servicesError}</td>
+                        </tr>
+                      ) : services.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted-foreground">No services found.</td>
+                        </tr>
+                      ) : null}
+                      {services.map((service) => (
                         <tr
                           key={service.id}
-                          onClick={() => setSelectedService(service)}
+                          onClick={() => handleViewServiceDetail(service.id)}
                           className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
                         >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
-                              <img src={service.icon} alt={service.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                              {service.icon ? (
+                                <img src={service.icon} alt={service.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-muted flex-shrink-0" />
+                              )}
                               <span className="font-medium text-foreground">{service.name}</span>
                             </div>
                           </td>
-                          <td className="px-5 py-3.5 text-muted-foreground">{service.categoryName}</td>
-                          <td className="px-5 py-3.5 text-foreground font-medium">${service.priceMin}-${service.priceMax}</td>
+                          <td className="px-5 py-3.5 text-muted-foreground">{service.category_name}</td>
+                          <td className="px-5 py-3.5 text-foreground font-medium">${parseFloat(service.price_range_min).toFixed(2)}-${parseFloat(service.price_range_max).toFixed(2)}</td>
                           <td className="px-5 py-3.5">
                             <StatusBadge status={service.is_active} />
                           </td>
@@ -522,7 +543,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                 </div>
 
                 {/* Service Pagination */}
-                {filteredServices.length > 0 && (
+                {servicesCount > 0 && (
                   <div className="px-5 py-3.5 border-t border-border flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span>{t.showResult}</span>
@@ -542,7 +563,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
 
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setServicePage(p => Math.max(1, p - 1))}
+                        onClick={() => setServicePage((p) => Math.max(1, p - 1))}
                         disabled={servicePage === 1}
                         className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
@@ -565,7 +586,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                       )}
 
                       <button
-                        onClick={() => setServicePage(p => Math.min(totalServicePages, p + 1))}
+                        onClick={() => setServicePage((p) => Math.min(totalServicePages, p + 1))}
                         disabled={servicePage === totalServicePages}
                         className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
@@ -583,7 +604,10 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
             <AddServiceForm
               lang={lang}
               editingService={editingService}
-              onSaveComplete={() => setEditingService(null)}
+              onSaveComplete={async () => {
+                setEditingService(null);
+                await refreshServices();
+              }}
             />
           )}
         </div>
@@ -621,17 +645,12 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
               </button>
               <button
                 onClick={async () => {
-                  if (selectedItem && activeTab === "categories") {
+                  if (selectedItem && activeTab === "services") {
                     try {
-                      await deleteCategory(selectedItem);
-                      setCategoryPage(1);
-                      const data = await getCategories({ page: 1, page_size: categoryPageSize, search: search.trim() || undefined });
-                      setCategories(data.results);
-                      setCategoriesCount(data.count);
-                      const stats = await getCategoryStats();
-                      setCategoryStats(stats);
+                      await deleteService(selectedItem);
+                      await refreshServices(1);
                     } catch (error) {
-                      console.error("Failed to delete category", error);
+                      console.error("Failed to delete service", error);
                     }
                   }
                   setShowDeleteModal(false);
@@ -647,17 +666,22 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
 
       {/* Service Details Modal */}
       <Modal
-        isOpen={!!selectedService}
-        onClose={() => setSelectedService(null)}
+        isOpen={selectedServiceLoading || !!selectedService}
+        onClose={() => {
+          setSelectedService(null);
+          setSelectedServiceLoading(false);
+        }}
         title={lang === "EN" ? "Service Details" : "Détails du service"}
         size="lg"
       >
-        {selectedService && (
+        {selectedServiceLoading ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">Loading service details...</div>
+        ) : selectedService ? (
           <div className="space-y-6">
             {/* Service Header */}
             <div className="flex items-start gap-4">
               <img
-                src={selectedService.coverImage}
+                src={selectedService.image || selectedService.icon || "https://via.placeholder.com/80"}
                 alt={selectedService.name}
                 className="w-20 h-20 rounded-xl object-cover flex-shrink-0 border border-border"
               />
@@ -665,7 +689,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                 <h3 className="text-xl font-semibold text-foreground mb-2">{selectedService.name}</h3>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-sm text-muted-foreground">
-                    {lang === "EN" ? "Category" : "Catégorie"}: {selectedService.categoryName}
+                    {lang === "EN" ? "Category" : "Catégorie"}: {selectedService.category_name}
                   </span>
                   <StatusBadge status={selectedService.is_active} />
                 </div>
@@ -682,7 +706,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                   </p>
                 </div>
                 <p className="text-lg font-bold text-blue-700">
-                  ${selectedService.priceMin}-${selectedService.priceMax}
+                  ${parseFloat(selectedService.price_range_min).toFixed(2)} - ${parseFloat(selectedService.price_range_max).toFixed(2)}
                 </p>
               </div>
 
@@ -690,20 +714,20 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                 <div className="flex items-center gap-2 mb-1">
                   <UserCheck className="w-4 h-4 text-green-600" />
                   <p className="text-xs text-green-600 font-medium">
-                    {lang === "EN" ? "Artisans" : "Artisans"}
+                    {lang === "EN" ? "Rating" : "Évaluation"}
                   </p>
                 </div>
-                <p className="text-lg font-bold text-green-700">{selectedService.assignedArtisans}</p>
+                <p className="text-lg font-bold text-green-700">{selectedService.avg_rating || "N/A"}</p>
               </div>
 
               <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
                 <div className="flex items-center gap-2 mb-1">
                   <Calendar className="w-4 h-4 text-orange-600" />
                   <p className="text-xs text-orange-600 font-medium">
-                    {lang === "EN" ? "Bookings" : "Réservations"}
+                    {lang === "EN" ? "Reviews" : "Avis"}
                   </p>
                 </div>
-                <p className="text-lg font-bold text-orange-700">{selectedService.activeBookings}</p>
+                <p className="text-lg font-bold text-orange-700">{selectedService.review_count ?? 0}</p>
               </div>
 
               <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
@@ -713,7 +737,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                     {lang === "EN" ? "Duration" : "Durée"}
                   </p>
                 </div>
-                <p className="text-lg font-bold text-purple-700">{selectedService.estimatedDuration}</p>
+                <p className="text-lg font-bold text-purple-700">{selectedService.completion_time}</p>
               </div>
             </div>
 
@@ -746,18 +770,18 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                   <p className="text-xs text-muted-foreground mb-1">
                     {lang === "EN" ? "Completion Time" : "Temps d'achèvement"}
                   </p>
-                  <p className="text-sm font-medium text-foreground">{selectedService.completionTime}</p>
+                  <p className="text-sm font-medium text-foreground">{selectedService.completion_time}</p>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </Modal>
     </main>
   );
 }
 
-function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Language; editingService: Service | null; onSaveComplete: () => void }) {
+function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Language; editingService: Service | null; onSaveComplete: () => void | Promise<void> }) {
   const [serviceName, setServiceName] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
@@ -767,7 +791,12 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
   const [priceMin, setPriceMin] = useState(40);
   const [priceMax, setPriceMax] = useState(200);
   const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [serviceIcon, setServiceIcon] = useState<string | null>(null);
+  const [iconFile, setIconFile] = useState<File | null>(null);
+  const [serviceCategories, setServiceCategories] = useState<Category[]>([]);
+  const [serviceCategoriesLoading, setServiceCategoriesLoading] = useState(false);
+  const [serviceCategoriesError, setServiceCategoriesError] = useState<string | null>(null);
   const [isDraggingMin, setIsDraggingMin] = useState(false);
   const [isDraggingMax, setIsDraggingMax] = useState(false);
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -783,13 +812,15 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
       setServiceName(editingService.name);
       setCategory(editingService.category);
       setDescription(editingService.description);
-      setCompletionTime(editingService.completionTime);
-      setPriority(editingService.priority);
+      setCompletionTime(String(editingService.completion_time));
+      setPriority(editingService.priority as "Normal" | "Urgent");
       setIsActive(editingService.is_active);
-      setPriceMin(editingService.priceMin);
-      setPriceMax(editingService.priceMax);
-      setCoverImage(editingService.coverImage);
+      setPriceMin(Number(editingService.price_range_min));
+      setPriceMax(Number(editingService.price_range_max));
+      setCoverImage(editingService.image);
+      setCoverFile(null);
       setServiceIcon(editingService.icon);
+      setIconFile(null);
     } else {
       // Reset to defaults when not editing
       setServiceName("");
@@ -804,6 +835,23 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
       setServiceIcon(null);
     }
   }, [editingService]);
+
+  useEffect(() => {
+    const loadServiceCategories = async () => {
+      setServiceCategoriesLoading(true);
+      setServiceCategoriesError(null);
+      try {
+        const data = await getCategories({ page: 1, page_size: 100, search: undefined });
+        setServiceCategories(data.results);
+      } catch (error) {
+        setServiceCategoriesError("Unable to load categories.");
+      } finally {
+        setServiceCategoriesLoading(false);
+      }
+    };
+
+    loadServiceCategories();
+  }, []);
 
   const t = {
     addNewService: editingService ? (lang === "EN" ? "Edit Service" : "Modifier le service") : (lang === "EN" ? "Add New Service" : "Ajouter un service"),
@@ -828,6 +876,7 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
   const handleCoverImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCoverFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setCoverImage(reader.result as string);
@@ -839,6 +888,7 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
   const handleServiceIconChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIconFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setServiceIcon(reader.result as string);
@@ -887,21 +937,47 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
     }
   }, [isDraggingMin, isDraggingMax, priceMin, priceMax]);
 
-  const handleSave = () => {
-    console.log(editingService ? "Updating service:" : "Creating service:", {
-      id: editingService?.id,
-      serviceName,
-      category,
-      description,
-      completionTime,
+  const handleSave = async () => {
+    if (!serviceName.trim() || !category.trim()) {
+      return;
+    }
+
+    const completionValue = Number(completionTime.replace(/[^0-9\.]/g, "")) || 0;
+    const payload = {
+      category: category.trim(),
+      name: serviceName.trim(),
+      description: description.trim(),
+      icon: iconFile,
+      image: coverFile,
+      price_range_min: String(priceMin),
+      price_range_max: String(priceMax),
       priority,
-      isActive,
-      priceMin,
-      priceMax,
-      coverImage,
-      serviceIcon,
-    });
-    onSaveComplete();
+      completion_time: completionValue,
+      is_active: isActive,
+    };
+
+    try {
+      if (editingService) {
+        await updateService(editingService.id, payload);
+      } else {
+        await createService(payload);
+      }
+      setCoverFile(null);
+      setIconFile(null);
+      setCoverImage(null);
+      setServiceIcon(null);
+      setServiceName("");
+      setCategory("");
+      setDescription("");
+      setCompletionTime("");
+      setPriority("Normal");
+      setIsActive(true);
+      setPriceMin(40);
+      setPriceMax(200);
+      await onSaveComplete();
+    } catch (error) {
+      console.error("Failed to save service", error);
+    }
   };
 
   const minPosition = (priceMin / MAX_PRICE) * 100;
@@ -911,18 +987,42 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
     <div className="w-full lg:w-[386px] bg-card rounded-2xl shadow-sm border border-[#f3f4f6] p-5 space-y-6 lg:sticky lg:top-4 self-start max-h-[calc(100vh-120px)] overflow-y-auto">
       <h3 className="text-lg font-semibold text-[#101828] font-['Inter',sans-serif]">{t.addNewService}</h3>
 
-      {/* Service Category Name */}
+      {/* Service Name */}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-[#364153] font-['Inter',sans-serif]">
-          {t.serviceCategoryName}
+          {lang === "EN" ? "Service Name" : "Nom du service"}
         </label>
         <input
           type="text"
-          placeholder={t.categoryPlaceholder}
+          placeholder={lang === "EN" ? "Enter service name" : "Entrez le nom du service"}
           value={serviceName}
           onChange={(e) => setServiceName(e.target.value)}
           className="w-full px-4 py-2.5 bg-white border border-[#d1d5dc] rounded-[14px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-base text-[rgba(10,10,10,0.5)] font-['Inter',sans-serif]"
         />
+      </div>
+
+      {/* Service Category */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-[#364153] font-['Inter',sans-serif]">
+          {t.serviceCategoryName}
+        </label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="w-full px-4 py-2.5 bg-white border border-[#d1d5dc] rounded-[14px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-base text-[rgba(10,10,10,0.5)] font-['Inter',sans-serif]"
+        >
+          <option value="" disabled>
+            {serviceCategoriesLoading ? (lang === "EN" ? "Loading categories..." : "Chargement...") : (lang === "EN" ? "Select a category" : "Sélectionnez une catégorie")}
+          </option>
+          {serviceCategories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+        {serviceCategoriesError && (
+          <p className="text-xs text-red-600">{serviceCategoriesError}</p>
+        )}
       </div>
 
       {/* Cover Image */}
