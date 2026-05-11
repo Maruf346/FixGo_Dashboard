@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { Modal, ConfirmModal } from "./components/Modal";
 import { ActionMenu } from "./components/ActionMenu";
 import { AuthUser, clearStoredAuth, loadStoredAuth, loginAdmin, logoutAdmin, saveAuthState } from "../services/auth";
+import { getBookings, getBookingDetail } from "../services/bookings";
 import {
   LayoutDashboard,
   BookOpen,
@@ -91,16 +92,92 @@ interface DashPayment {
 
 interface Booking {
   id: string;
-  orderId: string;
-  date: string;
-  buyer: string;
-  buyerAvatar: string;
-  payment: PaymentStatus;
-  artisan: string;
-  artisanAvatar: string;
-  service: string;
+  booking_id: string;
+  client_name: string;
+  client_email: string;
+  artisan_name: string;
+  service_name: string;
+  category_name: string;
   status: BookingStatus;
-  budget: string;
+  assignment_mode: "client_chosen" | "auto_assigned";
+  scheduled_date: string;
+  scheduled_time: string;
+  total_amount: string | null;
+  created_at: string;
+}
+
+interface BookingPerson {
+  id: string;
+  full_name: string;
+  email: string;
+  profile_picture: string | null;
+  phone: string | null;
+}
+
+interface BookingStatusHistoryItem {
+  id: string;
+  status: BookingStatus;
+  changed_by: BookingPerson;
+  note: string | null;
+  timestamp: string;
+}
+
+interface BookingChecklistItem {
+  id: string;
+  label: string;
+  is_done: boolean;
+  order: number;
+  done_at: string | null;
+  created_at: string;
+}
+
+interface BookingAdditionalCost {
+  id: string;
+  reason: string;
+  amount: string;
+  status: "pending" | "approved" | "rejected";
+  responded_at: string | null;
+  created_at: string;
+}
+
+interface BookingIssueReport {
+  id: string;
+  issue_type: string;
+  urgency: string;
+  description: string | null;
+  attachment: string | null;
+  is_resolved: boolean;
+  resolved_at: string | null;
+  reported_by: BookingPerson;
+  created_at: string;
+}
+
+interface BookingDetail extends Booking {
+  client: BookingPerson;
+  artisan: BookingPerson;
+  full_address: string | null;
+  address_lat: string | null;
+  address_lng: string | null;
+  additional_notes: string | null;
+  image: { id: string; image: string; uploaded_at: string } | null;
+  base_price: string | null;
+  platform_fee: string | null;
+  artisan_payout: string | null;
+  completion_signature: string | null;
+  requested_at: string | null;
+  confirmed_at: string | null;
+  on_way_at: string | null;
+  arrived_at: string | null;
+  working_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancellation_reason: string | null;
+  status_history: BookingStatusHistoryItem[];
+  checklist_items: BookingChecklistItem[];
+  additional_costs: BookingAdditionalCost[];
+  issue_reports: BookingIssueReport[];
+  updated_at: string;
 }
 
 interface Notification {
@@ -171,7 +248,7 @@ const DASH_PAYMENTS: DashPayment[] = [
   { id: "5", orderId: "#ID238980", date: "Apr 26, 2022", buyer: "Lena Dubois", buyerAvatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=40&h=40&fit=crop&auto=format", payment: "Paid", worker: "Carlos Rivera", workerAvatar: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=40&h=40&fit=crop&auto=format", status: "Completed", budget: "$150", fee: "$7.5" },
 ];
 
-const ALL_BOOKINGS: Booking[] = [
+const ALL_BOOKINGS = [
   { id: "b1",  orderId: "#ID238976", date: "Apr 24, 2022", buyer: "Justin Leo",    buyerAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&auto=format", payment: "Paid",    artisan: "Alex Smith",   artisanAvatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&auto=format", service: "Plumbing",       status: "completed",  budget: "$90" },
   { id: "b2",  orderId: "#ID238977", date: "Apr 24, 2022", buyer: "Sarah Miller",  buyerAvatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=40&h=40&fit=crop&auto=format", payment: "Paid",    artisan: "Tom Clarke",   artisanAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&auto=format", service: "Electrical",     status: "completed",  budget: "$120" },
   { id: "b3",  orderId: "#ID238978", date: "Apr 25, 2022", buyer: "Maria Costa",   buyerAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=40&h=40&fit=crop&auto=format", payment: "Paid",    artisan: "James Wilson", artisanAvatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=40&h=40&fit=crop&auto=format", service: "Carpentry",      status: "working",    budget: "$75" },
@@ -264,13 +341,22 @@ const INITIAL_NOTIFICATIONS: Notification[] = [
 
 // ─── Shared atoms ─────────────────────────────────────────────────────────────
 
-function AvatarImg({ src, name }: { src: string; name: string }) {
-  return (
+function AvatarImg({ src, name, size = 32, className = "" }: { src: string | null | undefined; name: string; size?: number; className?: string }) {
+  const initial = name?.trim()?.charAt(0)?.toUpperCase() || "?";
+  return src ? (
     <img
       src={src}
       alt={name}
-      className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0"
+      style={{ width: size, height: size }}
+      className={`rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0 ${className}`}
     />
+  ) : (
+    <div
+      style={{ width: size, height: size }}
+      className={`rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center border-2 border-white shadow-sm flex-shrink-0 ${className}`}
+    >
+      {initial}
+    </div>
   );
 }
 
@@ -769,7 +855,7 @@ function DashboardPage({ lang }: { lang: Language }) {
 
 // ─── Bookings page ────────────────────────────────────────────────────────────
 
-type SortKey = "orderId" | "date" | "budget";
+type SortKey = "booking_id" | "scheduled_date" | "total_amount";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE_OPTIONS = [8, 16, 20];
@@ -785,55 +871,109 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 
 function BookingsPage({ lang }: { lang: Language }) {
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("orderId");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("booking_id");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingCount, setBookingCount] = useState(0);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [bookingListError, setBookingListError] = useState<string | null>(null);
+
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<BookingDetail | null>(null);
+  const [loadingBookingDetail, setLoadingBookingDetail] = useState(false);
+  const [bookingDetailError, setBookingDetailError] = useState<string | null>(null);
 
   const t = {
-    search:     lang === "EN" ? "Search orders, buyers, artisans…" : "Rechercher commandes, clients, artisans…",
+    search:     lang === "EN" ? "Search bookings by id, client, artisan…" : "Rechercher réservations par id, client, artisan…",
     allOrders:  lang === "EN" ? "All Orders" : "Toutes les commandes",
-    date:       lang === "EN" ? "Date" : "Date",
-    buyer:      lang === "EN" ? "Buyer" : "Acheteur",
-    payment:    lang === "EN" ? "Payment" : "Paiement",
-    worker:     lang === "EN" ? "Worker" : "Artisan",
+    bookingId:  lang === "EN" ? "Booking ID" : "ID de réservation",
     service:    lang === "EN" ? "Service" : "Service",
+    date:       lang === "EN" ? "Date" : "Date",
+    buyer:      lang === "EN" ? "Client" : "Client",
+    worker:     lang === "EN" ? "Artisan" : "Artisan",
     status:     lang === "EN" ? "Status" : "Statut",
-    budget:     lang === "EN" ? "Budget" : "Budget",
+    totalAmount: lang === "EN" ? "Total Amount" : "Montant total",
     showResult: lang === "EN" ? "Show result:" : "Résultats :",
     empty:      lang === "EN" ? "No bookings found" : "Aucune réservation trouvée",
     emptySub:   lang === "EN" ? "Try adjusting your search or check back later." : "Essayez d'affiner votre recherche.",
     of:         lang === "EN" ? "of" : "sur",
+    loading:    lang === "EN" ? "Loading bookings…" : "Chargement des réservations…",
+    noDetails:  lang === "EN" ? "Booking details unavailable." : "Détails de réservation non disponibles.",
   };
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
     setPage(1);
   };
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return ALL_BOOKINGS.filter(b =>
-      !q ||
-      b.orderId.toLowerCase().includes(q) ||
-      b.buyer.toLowerCase().includes(q) ||
-      b.artisan.toLowerCase().includes(q) ||
-      b.service.toLowerCase().includes(q)
-    ).sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === "orderId") cmp = a.orderId.localeCompare(b.orderId);
-      else if (sortKey === "date") cmp = a.date.localeCompare(b.date);
-      else if (sortKey === "budget") cmp = parseFloat(a.budget.slice(1)) - parseFloat(b.budget.slice(1));
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [search, sortKey, sortDir]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setSearchQuery(search.trim());
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => {
+    const fetchBookings = async () => {
+      setLoadingBookings(true);
+      setBookingListError(null);
 
+      const orderingMap: Record<SortKey, string> = {
+        booking_id: "booking_id",
+        scheduled_date: "scheduled_date",
+        total_amount: "total_amount",
+      };
+
+      try {
+        const data = await getBookings({
+          page,
+          page_size: pageSize,
+          search: searchQuery || undefined,
+          ordering: sortDir === "asc" ? orderingMap[sortKey] : `-${orderingMap[sortKey]}`,
+        });
+
+        setBookings(data.results);
+        setBookingCount(data.count);
+      } catch (error) {
+        setBookingListError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setLoadingBookings(false);
+      }
+    };
+
+    fetchBookings();
+  }, [page, pageSize, searchQuery, sortKey, sortDir]);
+
+  const openBookingDetail = async (id: string) => {
+    setSelectedBookingId(id);
+    setSelectedBooking(null);
+    setBookingDetailError(null);
+    setLoadingBookingDetail(true);
+
+    try {
+      const detail = await getBookingDetail(id);
+      setSelectedBooking(detail);
+    } catch (error) {
+      setBookingDetailError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoadingBookingDetail(false);
+    }
+  };
+
+  const closeBookingDetail = () => {
+    setSelectedBooking(null);
+    setSelectedBookingId(null);
+    setBookingDetailError(null);
+    setLoadingBookingDetail(false);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(bookingCount / pageSize));
   const pageNumbers = useMemo(() => {
     const pages: (number | "…")[] = [];
     if (totalPages <= 6) {
@@ -848,11 +988,11 @@ function BookingsPage({ lang }: { lang: Language }) {
     return pages;
   }, [page, totalPages]);
 
+  const bookingRows = bookings;
+
   return (
     <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
-      {/* Table card */}
       <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
-        {/* Search bar */}
         <div className="px-5 py-4 border-b border-border">
           <div className="relative max-w-sm">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
@@ -860,76 +1000,72 @@ function BookingsPage({ lang }: { lang: Language }) {
               type="text"
               placeholder={t.search}
               value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-sm bg-muted/60 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all placeholder:text-muted-foreground"
             />
           </div>
         </div>
 
-        {/* Desktop table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/20">
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("orderId")}>
-                  {t.allOrders}<SortIcon active={sortKey === "orderId"} dir={sortDir} />
-                </th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("date")}>
-                  {t.date}<SortIcon active={sortKey === "date"} dir={sortDir} />
-                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("booking_id")}>{t.bookingId}<SortIcon active={sortKey === "booking_id"} dir={sortDir} /></th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.service}</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("scheduled_date")}>{t.date}<SortIcon active={sortKey === "scheduled_date"} dir={sortDir} /></th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.buyer}</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.payment}</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.worker}</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.status}</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("budget")}>
-                  {t.budget}<SortIcon active={sortKey === "budget"} dir={sortDir} />
-                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort("total_amount")}>{t.totalAmount}<SortIcon active={sortKey === "total_amount"} dir={sortDir} /></th>
                 <th className="px-3 py-3" />
               </tr>
             </thead>
             <tbody>
-              {paginated.length === 0 ? (
+              {loadingBookings ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-muted-foreground">{t.loading}</td>
+                </tr>
+              ) : bookingListError ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-red-600">{bookingListError}</td>
+                </tr>
+              ) : bookingRows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-16 text-center">
                     <EmptyState lang={lang} />
                   </td>
                 </tr>
               ) : (
-                paginated.map((b) => (
+                bookingRows.map((b) => (
                   <tr
                     key={b.id}
-                    onClick={() => setSelectedBooking(b)}
+                    onClick={() => openBookingDetail(b.id)}
                     className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer"
                   >
-                    <td className="px-5 py-3.5 font-medium text-primary whitespace-nowrap">{b.orderId}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">
-                      <span className="flex items-center gap-1.5">
-                        <CalendarDays size={13} className="text-muted-foreground/60 flex-shrink-0" />
-                        {b.date}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2 whitespace-nowrap">
-                        <AvatarImg src={b.buyerAvatar} name={b.buyer} />
-                        <span className="font-medium text-foreground">{b.buyer}</span>
+                      <td className="px-5 py-3.5 font-medium text-primary whitespace-nowrap">{b.booking_id}</td>
+                    <td className="px-5 py-3.5 text-sm text-foreground">{b.service_name}</td>
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground whitespace-nowrap">{b.scheduled_date}</td>
+                    <td className="px-5 py-3.5 text-sm text-foreground">
+                      <div className="flex items-center gap-3">
+                        <AvatarImg src={(b as any).client_picture ?? null} name={b.client_name} size={32} />
+                        <span>{b.client_name}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5"><PaymentBadge status={b.payment} /></td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2 whitespace-nowrap">
-                        <AvatarImg src={b.artisanAvatar} name={b.artisan} />
-                        <span className="font-medium text-foreground">{b.artisan}</span>
+                    <td className="px-5 py-3.5 text-sm text-foreground">
+                      <div className="flex items-center gap-3">
+                        <AvatarImg src={(b as any).artisan_picture ?? null} name={b.artisan_name} size={32} />
+                        <span>{b.artisan_name}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3.5"><BookingStatusBadge status={b.status} lang={lang} /></td>
-                    <td className="px-5 py-3.5 font-semibold text-foreground whitespace-nowrap">{b.budget}</td>
+                    <td className="px-5 py-3.5 font-semibold text-foreground whitespace-nowrap">{b.total_amount ?? "N/A"}</td>
                     <td className="px-3 py-3.5">
                       <ActionMenu
                         items={[
                           {
                             label: lang === "EN" ? "View Details" : "Voir les détails",
                             icon: <Eye size={14} />,
-                            onClick: () => setSelectedBooking(b),
+                            onClick: () => openBookingDetail(b.id),
                           },
                         ]}
                       />
@@ -941,50 +1077,43 @@ function BookingsPage({ lang }: { lang: Language }) {
           </table>
         </div>
 
-        {/* Mobile card list */}
         <div className="md:hidden divide-y divide-border">
-          {paginated.length === 0 ? (
+          {loadingBookings ? (
+            <div className="px-5 py-10 text-center text-sm text-muted-foreground">{t.loading}</div>
+          ) : bookingListError ? (
+            <div className="px-5 py-10 text-center text-sm text-red-600">{bookingListError}</div>
+          ) : bookingRows.length === 0 ? (
             <div className="px-5 py-16 text-center"><EmptyState lang={lang} /></div>
           ) : (
-            paginated.map((b) => (
+            bookingRows.map((b) => (
               <div
                 key={b.id}
-                onClick={() => setSelectedBooking(b)}
+                onClick={() => openBookingDetail(b.id)}
                 className="px-5 py-4 hover:bg-muted/40 transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className="text-sm font-semibold text-primary">{b.orderId}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                      <CalendarDays size={11} />{b.date}
-                    </p>
+                    <p className="text-sm font-semibold text-primary">{b.booking_id}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><CalendarDays size={11} />{b.scheduled_date}</p>
                   </div>
-                  <div>
-                    <BookingStatusBadge status={b.status} lang={lang} />
-                  </div>
+                  <BookingStatusBadge status={b.status} lang={lang} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.service}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{b.service_name}</p>
+                  </div>
+                  <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.buyer}</p>
-                    <div className="flex items-center gap-1.5">
-                      <AvatarImg src={b.buyerAvatar} name={b.buyer} />
-                      <span className="text-sm font-medium text-foreground truncate">{b.buyer}</span>
-                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">{b.client_name}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.worker}</p>
-                    <div className="flex items-center gap-1.5">
-                      <AvatarImg src={b.artisanAvatar} name={b.artisan} />
-                      <span className="text-sm font-medium text-foreground truncate">{b.artisan}</span>
-                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">{b.artisan_name}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.payment}</p>
-                    <PaymentBadge status={b.payment} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.budget}</p>
-                    <p className="text-sm font-bold text-foreground">{b.budget}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{t.totalAmount}</p>
+                    <p className="text-sm font-medium text-foreground">{b.total_amount ?? "N/A"}</p>
                   </div>
                 </div>
               </div>
@@ -992,10 +1121,8 @@ function BookingsPage({ lang }: { lang: Language }) {
           )}
         </div>
 
-        {/* Pagination */}
-        {filtered.length > 0 && (
+        {bookingRows.length > 0 && (
           <div className="px-5 py-3.5 border-t border-border flex flex-wrap items-center justify-between gap-3">
-            {/* Show result */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>{t.showResult}</span>
               <div className="relative">
@@ -1008,18 +1135,23 @@ function BookingsPage({ lang }: { lang: Language }) {
                 </button>
                 {pageSizeOpen && (
                   <div className="absolute left-0 bottom-full mb-1 w-20 bg-card rounded-xl border border-border shadow-lg overflow-hidden z-50">
-                    {PAGE_SIZE_OPTIONS.map(s => (
-                      <button key={s} onClick={() => { setPageSize(s); setPage(1); setPageSizeOpen(false); }} className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${pageSize === s ? "text-primary font-semibold" : "text-foreground"}`}>{s}</button>
+                    {PAGE_SIZE_OPTIONS.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => { setPageSize(s); setPage(1); setPageSizeOpen(false); }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${pageSize === s ? "text-primary font-semibold" : "text-foreground"}`}
+                      >
+                        {s}
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Page numbers */}
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
@@ -1042,7 +1174,7 @@ function BookingsPage({ lang }: { lang: Language }) {
               )}
 
               <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
@@ -1055,114 +1187,201 @@ function BookingsPage({ lang }: { lang: Language }) {
 
       <div className="h-4" />
 
-      {/* Booking Details Modal */}
-      {selectedBooking && (
-        <Modal
-          isOpen={!!selectedBooking}
-          onClose={() => setSelectedBooking(null)}
-          title={lang === "EN" ? "Booking Details" : "Détails de la réservation"}
-          size="lg"
-        >
+      <Modal
+        isOpen={!!selectedBookingId}
+        onClose={closeBookingDetail}
+        title={lang === "EN" ? "Booking Details" : "Détails de la réservation"}
+        size="xl"
+      >
+        {loadingBookingDetail ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">{t.loading}</div>
+        ) : bookingDetailError ? (
+          <div className="py-10 text-center text-sm text-red-600">{bookingDetailError}</div>
+        ) : !selectedBooking ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">{t.noDetails}</div>
+        ) : (
           <div className="space-y-6">
-            {/* Booking ID & Status */}
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">
-                  {lang === "EN" ? "Booking ID" : "ID de réservation"}
-                </p>
-                <p className="text-lg font-semibold text-foreground">{selectedBooking.orderId}</p>
+                <p className="text-sm text-muted-foreground mb-1">{t.bookingId}</p>
+                <p className="text-lg font-semibold text-foreground">{selectedBooking.booking_id}</p>
+                <p className="text-sm text-muted-foreground mt-1">{selectedBooking.created_at ? new Date(selectedBooking.created_at).toLocaleString() : "N/A"}</p>
               </div>
               <BookingStatusBadge status={selectedBooking.status} lang={lang} />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Customer Info */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">
-                  {lang === "EN" ? "Customer Information" : "Informations client"}
-                </h3>
-                <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                  <img src={selectedBooking.buyerAvatar} alt={selectedBooking.buyer} className="w-12 h-12 rounded-full object-cover" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="p-4 bg-muted/30 rounded-2xl border border-border">
+                <h4 className="text-sm font-semibold text-foreground mb-3">{lang === "EN" ? "Client" : "Client"}</h4>
+                <div className="flex items-center gap-3">
+                  <AvatarImg src={selectedBooking.client.profile_picture} name={selectedBooking.client.full_name} size={52} />
                   <div>
-                    <p className="font-medium text-foreground">{selectedBooking.buyer}</p>
-                    <p className="text-sm text-muted-foreground">customer@email.com</p>
+                    <p className="font-semibold text-foreground">{selectedBooking.client.full_name || "N/A"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedBooking.client.email || "N/A"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedBooking.client.phone || "N/A"}</p>
                   </div>
                 </div>
               </div>
-
-              {/* Artisan Info */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">
-                  {lang === "EN" ? "Assigned Artisan" : "Artisan assigné"}
-                </h3>
-                <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                  <img src={selectedBooking.artisanAvatar} alt={selectedBooking.artisan} className="w-12 h-12 rounded-full object-cover" />
+              <div className="p-4 bg-muted/30 rounded-2xl border border-border">
+                <h4 className="text-sm font-semibold text-foreground mb-3">{lang === "EN" ? "Artisan" : "Artisan"}</h4>
+                <div className="flex items-center gap-3">
+                  <AvatarImg src={selectedBooking.artisan.profile_picture} name={selectedBooking.artisan.full_name} size={52} />
                   <div>
-                    <p className="font-medium text-foreground">{selectedBooking.artisan}</p>
-                    <p className="text-sm text-muted-foreground">artisan@email.com</p>
+                    <p className="font-semibold text-foreground">{selectedBooking.artisan.full_name || "N/A"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedBooking.artisan.email || "N/A"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedBooking.artisan.phone || "N/A"}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Service Details */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">
-                {lang === "EN" ? "Service Details" : "Détails du service"}
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {lang === "EN" ? "Service Type" : "Type de service"}
-                  </p>
-                  <p className="font-medium text-foreground">{selectedBooking.service}</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="p-4 bg-muted/30 rounded-2xl border border-border space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">{lang === "EN" ? "Service & Schedule" : "Service et planning"}</h4>
+                <div className="grid gap-3">
+                  <DetailRow label={lang === "EN" ? "Service" : "Service"} value={selectedBooking.service_name || "N/A"} />
+                  <DetailRow label={lang === "EN" ? "Category" : "Catégorie"} value={selectedBooking.category_name || "N/A"} />
+                  <DetailRow label={lang === "EN" ? "Assignment" : "Affectation"} value={selectedBooking.assignment_mode.replace("_", " ") || "N/A"} />
+                  <DetailRow label={lang === "EN" ? "Scheduled Date" : "Date prévue"} value={selectedBooking.scheduled_date || "N/A"} />
+                  <DetailRow label={lang === "EN" ? "Scheduled Time" : "Heure prévue"} value={selectedBooking.scheduled_time || "N/A"} />
+                  <DetailRow label={lang === "EN" ? "Location" : "Adresse"} value={selectedBooking.full_address || "N/A"} />
+                  <DetailRow label={lang === "EN" ? "Notes" : "Notes"} value={selectedBooking.additional_notes || "N/A"} />
                 </div>
+              </div>
+
+              <div className="p-4 bg-muted/30 rounded-2xl border border-border space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">{lang === "EN" ? "Financials" : "Finances"}</h4>
+                <DetailRow label={lang === "EN" ? "Base Price" : "Prix de base"} value={selectedBooking.base_price || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Total Amount" : "Montant total"} value={selectedBooking.total_amount || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Platform Fee" : "Frais plateforme"} value={selectedBooking.platform_fee || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Artisan Payout" : "Paiement artisan"} value={selectedBooking.artisan_payout || "N/A"} />
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {lang === "EN" ? "Date" : "Date"}
-                  </p>
-                  <p className="font-medium text-foreground">{selectedBooking.date}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {lang === "EN" ? "Budget" : "Budget"}
-                  </p>
-                  <p className="font-medium text-foreground">{selectedBooking.budget}</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">{lang === "EN" ? "Completion Signature" : "Signature de fin"}</p>
+                  {selectedBooking.completion_signature ? (
+                    <img src={selectedBooking.completion_signature} alt="Completion Signature" className="w-full h-48 object-contain rounded-2xl border border-border bg-white" />
+                  ) : (
+                    <div className="w-full h-48 rounded-2xl bg-muted/50 border border-border flex items-center justify-center text-sm text-muted-foreground">
+                      {lang === "EN" ? "No signature available" : "Aucune signature disponible"}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Payment & Location */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-foreground">
-                  {lang === "EN" ? "Payment Status" : "Statut du paiement"}
-                </h3>
-                <PaymentBadge status={selectedBooking.payment} />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="p-4 bg-muted/30 rounded-2xl border border-border space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">{lang === "EN" ? "Booking Timeline" : "Chronologie"}</h4>
+                <DetailRow label={lang === "EN" ? "Requested" : "Demandé"} value={selectedBooking.requested_at || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Confirmed" : "Confirmé"} value={selectedBooking.confirmed_at || "N/A"} />
+                <DetailRow label={lang === "EN" ? "On The Way" : "En route"} value={selectedBooking.on_way_at || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Arrived" : "Arrivé"} value={selectedBooking.arrived_at || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Working" : "En cours"} value={selectedBooking.working_at || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Completed" : "Terminé"} value={selectedBooking.completed_at || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Cancelled" : "Annulé"} value={selectedBooking.cancelled_at || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Cancellation Reason" : "Raison de l'annulation"} value={selectedBooking.cancellation_reason || "N/A"} />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-foreground">
-                  {lang === "EN" ? "Location" : "Emplacement"}
-                </h3>
-                <p className="text-sm text-muted-foreground">123 Main Street, City, Country</p>
+
+              <div className="p-4 bg-muted/30 rounded-2xl border border-border space-y-3">
+                <h4 className="text-sm font-semibold text-foreground">{lang === "EN" ? "Cancel Info" : "Info annulation"}</h4>
+                <DetailRow label={lang === "EN" ? "Cancelled By" : "Annulé par"} value={selectedBooking.cancelled_by || "N/A"} />
+                <DetailRow label={lang === "EN" ? "Updated At" : "Mis à jour le"} value={selectedBooking.updated_at || "N/A"} />
               </div>
             </div>
 
-            {/* Notes */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-foreground">
-                {lang === "EN" ? "Notes" : "Remarques"}
-              </h3>
-              <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">
-                {lang === "EN"
-                  ? "Customer requested early morning service. Please arrive before 8 AM."
-                  : "Le client a demandé un service tôt le matin. Veuillez arriver avant 8h."}
-              </p>
-            </div>
+            <TabularSection
+              lang={lang}
+              title={lang === "EN" ? "Status History" : "Historique des statuts"}
+              headers={[lang === "EN" ? "Status" : "Statut", lang === "EN" ? "Changed By" : "Modifié par", lang === "EN" ? "Note" : "Note", lang === "EN" ? "Timestamp" : "Horodatage"]}
+              rows={selectedBooking.status_history.map((item) => [
+                item.status,
+                item.changed_by.full_name || item.changed_by.email || "N/A",
+                item.note || "N/A",
+                item.timestamp || "N/A",
+              ])}
+            />
+
+            <TabularSection
+              lang={lang}
+              title={lang === "EN" ? "Checklist Items" : "Liste de contrôle"}
+              headers={[lang === "EN" ? "Item" : "Élément", lang === "EN" ? "Done" : "Fait", lang === "EN" ? "Done At" : "Fait le", lang === "EN" ? "Created At" : "Créé le"]}
+              rows={selectedBooking.checklist_items.map((item) => [
+                item.label || "N/A",
+                item.is_done ? (lang === "EN" ? "Yes" : "Oui") : (lang === "EN" ? "No" : "Non"),
+                item.done_at || "N/A",
+                item.created_at || "N/A",
+              ])}
+            />
+
+            <TabularSection
+              lang={lang}
+              title={lang === "EN" ? "Additional Costs" : "Coûts supplémentaires"}
+              headers={[lang === "EN" ? "Reason" : "Raison", lang === "EN" ? "Amount" : "Montant", lang === "EN" ? "Status" : "Statut", lang === "EN" ? "Responded At" : "Répondu le"]}
+              rows={selectedBooking.additional_costs.map((item) => [
+                item.reason || "N/A",
+                item.amount || "N/A",
+                item.status,
+                item.responded_at || "N/A",
+              ])}
+            />
+
+            <TabularSection
+              lang={lang}
+              title={lang === "EN" ? "Issue Reports" : "Rapports de problèmes"}
+              headers={[lang === "EN" ? "Issue Type" : "Type de problème", lang === "EN" ? "Urgency" : "Urgence", lang === "EN" ? "Description" : "Description", lang === "EN" ? "Reporter" : "Signaleur"]}
+              rows={selectedBooking.issue_reports.map((item) => [
+                item.issue_type || "N/A",
+                item.urgency || "N/A",
+                item.description || "N/A",
+                item.reported_by.full_name || item.reported_by.email || "N/A",
+              ])}
+            />
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
     </main>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="min-w-[120px] text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function TabularSection({ lang, title, headers, rows }: { lang: Language; title: string; headers: string[]; rows: string[][] }) {
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <div className="overflow-x-auto rounded-2xl border border-border bg-muted/30">
+        <table className="min-w-full text-sm">
+          <thead className="bg-muted/20">
+            <tr>
+              {headers.map((header) => (
+                <th key={header} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={headers.length} className="px-3 py-4 text-sm text-muted-foreground text-center">{lang === "EN" ? "No records available" : "Aucun enregistrement disponible"}</td>
+              </tr>
+            ) : (
+              rows.map((row, index) => (
+                <tr key={index} className="border-t border-border">
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex} className="px-3 py-2 text-sm text-foreground">{cell}</td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
