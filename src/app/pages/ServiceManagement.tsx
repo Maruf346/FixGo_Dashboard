@@ -18,17 +18,19 @@ import {
   Calendar,
 } from "lucide-react";
 import { Modal } from "../components/Modal";
+import {
+  getCategories,
+  getCategoryStats,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  CategoryItem,
+  CategoryStats,
+} from "../../services/categories";
 
 type Language = "EN" | "FR";
 
-interface Category {
-  id: string;
-  name: string;
-  icon: string;
-  order: number;
-  is_active: boolean;
-  serviceCount: number;
-}
+type Category = CategoryItem;
 
 interface Service {
   id: string;
@@ -48,16 +50,6 @@ interface Service {
   estimatedDuration: string;
 }
 
-// Generate more categories for pagination demo with proper image URLs
-const CATEGORY_IMAGES = [
-  "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=80&h=80&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=80&h=80&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=80&h=80&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=80&h=80&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1581094271901-8022df4466f9?w=80&h=80&fit=crop&auto=format",
-  "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=80&h=80&fit=crop&auto=format",
-];
-
 const SERVICE_IMAGES = [
   "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=40&h=40&fit=crop&auto=format",
   "https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=40&h=40&fit=crop&auto=format",
@@ -66,15 +58,6 @@ const SERVICE_IMAGES = [
   "https://images.unsplash.com/photo-1581094271901-8022df4466f9?w=40&h=40&fit=crop&auto=format",
   "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=40&h=40&fit=crop&auto=format",
 ];
-
-const MOCK_CATEGORIES: Category[] = Array.from({ length: 20 }, (_, i) => ({
-  id: `cat${i + 1}`,
-  name: i === 0 ? "Plumbing Services" : i === 1 ? "Electrical" : i === 2 ? "Carpentry" : i === 3 ? "Painting Services" : i === 4 ? "HVAC Services" : i === 5 ? "Cleaning Services" : `Service Category ${i + 1}`,
-  icon: CATEGORY_IMAGES[i % CATEGORY_IMAGES.length],
-  order: i + 1,
-  is_active: Math.random() > 0.2,
-  serviceCount: Math.floor(Math.random() * 20) + 1,
-}));
 
 // Generate more services for pagination demo with proper image URLs
 const MOCK_SERVICES: Service[] = Array.from({ length: 25 }, (_, i) => ({
@@ -116,6 +99,11 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
   // Pagination for categories
   const [categoryPage, setCategoryPage] = useState(1);
   const [categoryPageSize, setCategoryPageSize] = useState(8);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesCount, setCategoriesCount] = useState(0);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [categoryStats, setCategoryStats] = useState<CategoryStats | null>(null);
 
   // Pagination for services
   const [servicePage, setServicePage] = useState(1);
@@ -143,17 +131,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
     cancel: lang === "EN" ? "Cancel" : "Annuler",
   };
 
-  // Filter and paginate categories
-  const filteredCategories = useMemo(() => {
-    const q = search.toLowerCase();
-    return MOCK_CATEGORIES.filter(c => !q || c.name.toLowerCase().includes(q));
-  }, [search]);
-
-  const totalCategoryPages = Math.max(1, Math.ceil(filteredCategories.length / categoryPageSize));
-  const paginatedCategories = filteredCategories.slice(
-    (categoryPage - 1) * categoryPageSize,
-    categoryPage * categoryPageSize
-  );
+  const totalCategoryPages = Math.max(1, Math.ceil(categoriesCount / categoryPageSize));
 
   const categoryPageNumbers = useMemo(() => {
     const pages: (number | "…")[] = [];
@@ -168,6 +146,35 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
     }
     return pages;
   }, [categoryPage, totalCategoryPages]);
+
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const stats = await getCategoryStats();
+        setCategoryStats(stats);
+      } catch (error) {
+        setCategoryStats(null);
+      }
+    };
+    loadStats();
+  }, []);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      setCategoriesLoading(true);
+      setCategoriesError(null);
+      try {
+        const data = await getCategories({ page: categoryPage, page_size: categoryPageSize, search: search.trim() || undefined });
+        setCategories(data.results);
+        setCategoriesCount(data.count);
+      } catch (error) {
+        setCategoriesError("Unable to load categories. Please try again.");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+    loadCategories();
+  }, [categoryPage, categoryPageSize, search]);
 
   // Filter and paginate services
   const filteredServices = useMemo(() => {
@@ -201,7 +208,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
   };
 
   const handleEditCategory = (id: string) => {
-    const category = MOCK_CATEGORIES.find(c => c.id === id);
+    const category = categories.find((c) => c.id === id);
     if (category) {
       setEditingCategory(category);
       setShowAddCategory(true);
@@ -214,9 +221,46 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
   };
 
   const handleEditService = (id: string) => {
-    const service = MOCK_SERVICES.find(s => s.id === id);
+    const service = MOCK_SERVICES.find((s) => s.id === id);
     if (service) {
       setEditingService(service);
+    }
+  };
+
+  const handleSaveCategory = async (payload: {
+    id?: string;
+    name: string;
+    description: string;
+    icon: File | null;
+    order: number;
+    is_active: boolean;
+  }) => {
+    try {
+      if (payload.id) {
+        await updateCategory(payload.id, {
+          name: payload.name,
+          description: payload.description,
+          icon: payload.icon,
+          order: payload.order,
+          is_active: payload.is_active,
+        });
+      } else {
+        await createCategory({
+          name: payload.name,
+          description: payload.description,
+          icon: payload.icon,
+          order: payload.order,
+          is_active: payload.is_active,
+        });
+      }
+      setCategoryPage(1);
+      const data = await getCategories({ page: 1, page_size: categoryPageSize, search: search.trim() || undefined });
+      setCategories(data.results);
+      setCategoriesCount(data.count);
+      const stats = await getCategoryStats();
+      setCategoryStats(stats);
+    } catch (error) {
+      console.error("Failed to save category", error);
     }
   };
 
@@ -230,7 +274,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
               <Briefcase className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{MOCK_SERVICES.length}</p>
+              <p className="text-2xl font-bold text-foreground">{categoryStats?.services ?? 0}</p>
               <p className="text-xs text-muted-foreground">{t.totalServices}</p>
             </div>
           </div>
@@ -240,7 +284,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
               <CheckCircle className="w-6 h-6 text-orange-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{MOCK_SERVICES.filter(s => s.is_active).length}</p>
+              <p className="text-2xl font-bold text-foreground">{categoryStats?.active_services ?? 0}</p>
               <p className="text-xs text-muted-foreground">{t.activeServices}</p>
             </div>
           </div>
@@ -250,7 +294,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
               <Users className="w-6 h-6 text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{MOCK_CATEGORIES.length}</p>
+              <p className="text-2xl font-bold text-foreground">{categoryStats?.categories ?? categoriesCount}</p>
               <p className="text-xs text-muted-foreground">{t.totalCategories}</p>
             </div>
           </div>
@@ -311,39 +355,58 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
             {activeTab === "categories" && (
               <>
                 <div className="p-5">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {paginatedCategories.map((cat) => (
-                      <div key={cat.id} className="bg-muted/30 rounded-xl p-4 border border-border hover:bg-muted/50 transition-colors cursor-pointer group">
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shadow-sm">
-                            <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover" />
-                          </div>
-                          <div className="text-center w-full">
-                            <p className="text-sm font-medium text-foreground truncate">{cat.name}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{cat.serviceCount} services</p>
-                          </div>
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleEditCategory(cat.id)}
-                              className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCategory(cat.id)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                  {categoriesLoading ? (
+                    <div className="rounded-2xl border border-border bg-muted/40 p-10 text-center text-sm text-muted-foreground">
+                      Loading categories...
+                    </div>
+                  ) : categoriesError ? (
+                    <div className="rounded-2xl border border-border bg-red-50 p-10 text-center text-sm text-red-600">
+                      {categoriesError}
+                    </div>
+                  ) : categories.length === 0 ? (
+                    <div className="rounded-2xl border border-border bg-muted/40 p-10 text-center text-sm text-muted-foreground">
+                      No categories found.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {categories.map((cat) => (
+                        <div key={cat.id} className="bg-muted/30 rounded-xl p-4 border border-border hover:bg-muted/50 transition-colors cursor-pointer group">
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shadow-sm">
+                              {cat.icon ? (
+                                <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground">N/A</div>
+                              )}
+                            </div>
+                            <div className="text-center w-full">
+                              <p className="text-sm font-medium text-foreground truncate">{cat.name}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{cat.description || "No description"}</p>
+                            </div>
+                            <StatusBadge status={cat.is_active} />
+                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => handleEditCategory(cat.id)}
+                                className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Category Pagination */}
-                {filteredCategories.length > 0 && (
+                {categoriesCount > 0 && (
                   <div className="px-5 py-3.5 border-t border-border flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span>{t.showResult}</span>
@@ -363,7 +426,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
 
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setCategoryPage(p => Math.max(1, p - 1))}
+                        onClick={() => setCategoryPage((p) => Math.max(1, p - 1))}
                         disabled={categoryPage === 1}
                         className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
@@ -386,7 +449,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                       )}
 
                       <button
-                        onClick={() => setCategoryPage(p => Math.min(totalCategoryPages, p + 1))}
+                        onClick={() => setCategoryPage((p) => Math.min(totalCategoryPages, p + 1))}
                         disabled={categoryPage === totalCategoryPages}
                         className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       >
@@ -531,7 +594,13 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
         <AddCategoryModal
           lang={lang}
           editingCategory={editingCategory}
+          defaultOrder={categoriesCount + 1}
           onClose={() => {
+            setShowAddCategory(false);
+            setEditingCategory(null);
+          }}
+          onSave={async (payload) => {
+            await handleSaveCategory(payload);
             setShowAddCategory(false);
             setEditingCategory(null);
           }}
@@ -551,8 +620,20 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                 {t.cancel}
               </button>
               <button
-                onClick={() => {
-                  console.log("Deleting:", selectedItem);
+                onClick={async () => {
+                  if (selectedItem && activeTab === "categories") {
+                    try {
+                      await deleteCategory(selectedItem);
+                      setCategoryPage(1);
+                      const data = await getCategories({ page: 1, page_size: categoryPageSize, search: search.trim() || undefined });
+                      setCategories(data.results);
+                      setCategoriesCount(data.count);
+                      const stats = await getCategoryStats();
+                      setCategoryStats(stats);
+                    } catch (error) {
+                      console.error("Failed to delete category", error);
+                    }
+                  }
                   setShowDeleteModal(false);
                 }}
                 className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
@@ -1054,31 +1135,39 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
   );
 }
 
-function AddCategoryModal({ lang, editingCategory, onClose }: { lang: Language; editingCategory: Category | null; onClose: () => void }) {
+function AddCategoryModal({ lang, editingCategory, defaultOrder, onClose, onSave }: { lang: Language; editingCategory: Category | null; defaultOrder: number; onClose: () => void; onSave: (payload: { id?: string; name: string; description: string; icon: File | null; order: number; is_active: boolean; }) => Promise<void>; }) {
   const [categoryName, setCategoryName] = useState("");
+  const [categoryDescription, setCategoryDescription] = useState("");
   const [categoryIcon, setCategoryIcon] = useState<string | null>(null);
-  const [order, setOrder] = useState(MOCK_CATEGORIES.length + 1);
+  const [categoryIconFile, setCategoryIconFile] = useState<File | null>(null);
+  const [order, setOrder] = useState(defaultOrder);
   const [isActive, setIsActive] = useState(true);
+  const [saving, setSaving] = useState(false);
   const iconInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize form with editing data
   useEffect(() => {
     if (editingCategory) {
       setCategoryName(editingCategory.name);
+      setCategoryDescription(editingCategory.description || "");
       setCategoryIcon(editingCategory.icon);
+      setCategoryIconFile(null);
       setOrder(editingCategory.order);
       setIsActive(editingCategory.is_active);
     } else {
       setCategoryName("");
+      setCategoryDescription("");
       setCategoryIcon(null);
-      setOrder(MOCK_CATEGORIES.length + 1);
+      setCategoryIconFile(null);
+      setOrder(defaultOrder);
       setIsActive(true);
     }
-  }, [editingCategory]);
+  }, [editingCategory, defaultOrder]);
 
   const t = {
     title: editingCategory ? (lang === "EN" ? "Edit Category" : "Modifier la catégorie") : (lang === "EN" ? "Add New Category" : "Ajouter une catégorie"),
     categoryName: lang === "EN" ? "Category Name" : "Nom de la catégorie",
+    categoryDescription: lang === "EN" ? "Category Description" : "Description de la catégorie",
     icon: lang === "EN" ? "Category Icon" : "Icône",
     order: lang === "EN" ? "Display Order" : "Ordre d'affichage",
     active: lang === "EN" ? "Active" : "Actif",
@@ -1087,11 +1176,14 @@ function AddCategoryModal({ lang, editingCategory, onClose }: { lang: Language; 
     dragDrop: lang === "EN" ? "Click to select icon" : "Cliquer pour sélectionner",
     maxSize: lang === "EN" ? "PNG, JPG, SVG, max 1 MB" : "PNG, JPG, SVG, max 1 Mo",
     orderHelper: lang === "EN" ? "Lower numbers appear first" : "Les petits numéros apparaissent en premier",
+    namePlaceholder: lang === "EN" ? "Enter category name" : "Entrez le nom de la catégorie",
+    descriptionPlaceholder: lang === "EN" ? "Add a short description" : "Ajoutez une courte description",
   };
 
   const handleIconChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0] ?? null;
     if (file) {
+      setCategoryIconFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setCategoryIcon(reader.result as string);
@@ -1100,20 +1192,32 @@ function AddCategoryModal({ lang, editingCategory, onClose }: { lang: Language; 
     }
   };
 
-  const handleSave = () => {
-    console.log(editingCategory ? "Updating category:" : "Creating category:", {
-      id: editingCategory?.id,
-      categoryName,
-      categoryIcon,
-      order,
-      isActive
-    });
-    onClose();
+  const handleSave = async () => {
+    if (!categoryName.trim()) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({
+        id: editingCategory?.id,
+        name: categoryName.trim(),
+        description: categoryDescription.trim(),
+        icon: categoryIconFile,
+        order,
+        is_active: isActive,
+      });
+      onClose();
+    } catch (error) {
+      console.error("Failed to save category", error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-2xl shadow-2xl max-w-lg w-full">
+    <div className="fixed inset-0 z-50 flex bg-black/50">
+      <div className="flex-1" onClick={onClose} />
+      <div className="w-full max-w-md bg-card shadow-2xl border-l border-border overflow-y-auto">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <h2 className="text-lg font-semibold text-foreground">{t.title}</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition-colors">
@@ -1126,10 +1230,21 @@ function AddCategoryModal({ lang, editingCategory, onClose }: { lang: Language; 
             <label className="block text-sm font-medium text-foreground mb-2">{t.categoryName}</label>
             <input
               type="text"
-              placeholder="Enter category name"
+              placeholder={t.namePlaceholder}
               value={categoryName}
               onChange={(e) => setCategoryName(e.target.value)}
               className="w-full px-4 py-2.5 bg-muted/60 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">{t.categoryDescription}</label>
+            <textarea
+              rows={4}
+              placeholder={t.descriptionPlaceholder}
+              value={categoryDescription}
+              onChange={(e) => setCategoryDescription(e.target.value)}
+              className="w-full px-4 py-2.5 bg-muted/60 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-sm resize-none"
             />
           </div>
 
@@ -1173,10 +1288,10 @@ function AddCategoryModal({ lang, editingCategory, onClose }: { lang: Language; 
             <span className="text-sm font-medium text-foreground">{t.active}</span>
             <button
               onClick={() => setIsActive(!isActive)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isActive ? 'bg-primary' : 'bg-gray-300'}`}
+              className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors ${isActive ? 'bg-[#1b457c]' : 'bg-gray-300'}`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${isActive ? 'translate-x-6' : 'translate-x-1'}`}
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isActive ? 'translate-x-6' : 'translate-x-1'}`}
               />
             </button>
           </div>
@@ -1186,15 +1301,17 @@ function AddCategoryModal({ lang, editingCategory, onClose }: { lang: Language; 
           <button
             onClick={onClose}
             className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            disabled={saving}
           >
             {t.cancel}
           </button>
           <button
             onClick={handleSave}
+            disabled={saving || !categoryName.trim()}
             className="px-6 py-2 text-white rounded-lg text-sm font-medium transition-colors shadow-sm hover:opacity-90"
             style={{ background: "linear-gradient(144.926deg, #1b457c 12%, #5286ca 88%)" }}
           >
-            {t.save}
+            {saving ? (lang === "EN" ? "Saving..." : "Enregistrement...") : t.save}
           </button>
         </div>
       </div>
