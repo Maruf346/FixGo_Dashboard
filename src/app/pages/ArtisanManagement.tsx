@@ -30,8 +30,23 @@ interface ArtisanWithLocation extends Artisan {
   locationDisplay: string;
 }
 
-function AvatarImg({ src, name }: { src: string; name: string }) {
-  return <img src={src} alt={name} className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0" />;
+function AvatarImg({ src, name, size = 32, className = "" }: { src: string; name: string; size?: number; className?: string }) {
+  const initial = name?.trim()?.charAt(0)?.toUpperCase() || "?";
+  return src ? (
+    <img
+      src={src}
+      alt={name}
+      style={{ width: size, height: size }}
+      className={`rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0 ${className}`}
+    />
+  ) : (
+    <div
+      style={{ width: size, height: size }}
+      className={`rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center border-2 border-white shadow-sm flex-shrink-0 ${className}`}
+    >
+      {initial}
+    </div>
+  );
 }
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
@@ -436,7 +451,7 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
           <div className="space-y-6">
             {/* Artisan Header */}
             <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
-              <img src={selectedArtisan.profile_picture || ""} alt={selectedArtisan.full_name} className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md" />
+              <AvatarImg src={selectedArtisan.profile_picture || ""} name={selectedArtisan.full_name} size={80} className="border-4 border-white shadow-md" />
               <div>
                 <h3 className="text-lg font-semibold text-foreground">{selectedArtisan.full_name}</h3>
                 <p className="text-sm text-muted-foreground">{selectedArtisan.email}</p>
