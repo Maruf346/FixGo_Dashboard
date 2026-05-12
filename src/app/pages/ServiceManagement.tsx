@@ -737,7 +737,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                     {lang === "EN" ? "Duration" : "Durée"}
                   </p>
                 </div>
-                <p className="text-lg font-bold text-purple-700">{selectedService.completion_time}</p>
+                <p className="text-lg font-bold text-purple-700">{selectedService.completion_time} hours</p>
               </div>
             </div>
 
@@ -757,7 +757,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                   </p>
                   <span
                     className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                      selectedService.priority === "Urgent"
+                      selectedService.priority === "urgent"
                         ? "bg-red-50 text-red-600 border border-red-200"
                         : "bg-gray-50 text-gray-600 border border-gray-200"
                     }`}
@@ -770,7 +770,7 @@ export default function ServiceManagement({ lang }: { lang: Language }) {
                   <p className="text-xs text-muted-foreground mb-1">
                     {lang === "EN" ? "Completion Time" : "Temps d'achèvement"}
                   </p>
-                  <p className="text-sm font-medium text-foreground">{selectedService.completion_time}</p>
+                  <p className="text-sm font-medium text-foreground">{selectedService.completion_time} hours</p>
                 </div>
               </div>
             </div>
@@ -786,7 +786,7 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [completionTime, setCompletionTime] = useState("");
-  const [priority, setPriority] = useState<"Normal" | "Urgent">("Normal");
+  const [priority, setPriority] = useState<"normal" | "urgent">("normal");
   const [isActive, setIsActive] = useState(true);
   const [priceMin, setPriceMin] = useState(40);
   const [priceMax, setPriceMax] = useState(200);
@@ -813,7 +813,7 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
       setCategory(editingService.category);
       setDescription(editingService.description);
       setCompletionTime(String(editingService.completion_time));
-      setPriority(editingService.priority as "Normal" | "Urgent");
+      setPriority(editingService.priority as "normal" | "urgent");
       setIsActive(editingService.is_active);
       setPriceMin(Number(editingService.price_range_min));
       setPriceMax(Number(editingService.price_range_max));
@@ -827,7 +827,7 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
       setCategory("");
       setDescription("");
       setCompletionTime("");
-      setPriority("Normal");
+      setPriority("normal");
       setIsActive(true);
       setPriceMin(40);
       setPriceMax(200);
@@ -970,7 +970,7 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
       setCategory("");
       setDescription("");
       setCompletionTime("");
-      setPriority("Normal");
+      setPriority("normal");
       setIsActive(true);
       setPriceMin(40);
       setPriceMax(200);
@@ -1181,11 +1181,11 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
         <div className="relative">
           <select
             value={priority}
-            onChange={(e) => setPriority(e.target.value as "Normal" | "Urgent")}
+            onChange={(e) => setPriority(e.target.value as "normal" | "urgent")}
             className="w-full px-4 py-2.5 bg-white border border-[#d1d5dc] rounded-[14px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-base text-[#6c7a92] font-['Inter',sans-serif] appearance-none"
           >
-            <option value="Normal">Normal</option>
-            <option value="Urgent">Urgent</option>
+            <option value="normal">Normal</option>
+            <option value="urgent">Urgent</option>
           </select>
           <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6c7a92] pointer-events-none" />
         </div>
@@ -1218,7 +1218,7 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
             setCategory("");
             setDescription("");
             setCompletionTime("");
-            setPriority("Normal");
+            setPriority("normal");
             setIsActive(true);
             setPriceMin(40);
             setPriceMax(200);
