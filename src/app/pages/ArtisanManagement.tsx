@@ -386,7 +386,7 @@ export default function ArtisanManagement({ lang }: { lang: Language }) {
                   <ChevronDown size={14} className={`transition-transform ${pageSizeOpen ? "rotate-180" : ""}`} />
                 </button>
                 {pageSizeOpen && (
-                  <div className="absolute z-10 top-full left-0 mt-1 border border-border rounded-lg bg-card shadow-lg">
+                  <div className="absolute left-0 bottom-full mb-1 w-20 bg-card rounded-xl border border-border shadow-lg overflow-hidden z-50">
                     {PAGE_SIZE_OPTIONS.map((size) => (
                       <button
                         key={size}
