@@ -136,7 +136,7 @@ export default function Messages({ lang }: { lang: Language }) {
 
   return (
     <main className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-      <div className="w-full lg:w-96 border-r border-border flex flex-col bg-card">
+      <div className="w-full lg:w-96 border-r border-border flex flex-col bg-card shadow-sm ring-1 ring-border/10">
         <div className="p-4 border-b border-border">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
