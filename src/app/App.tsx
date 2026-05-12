@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { Modal, ConfirmModal } from "./components/Modal";
 import { ActionMenu } from "./components/ActionMenu";
 import { AuthUser, clearStoredAuth, loadStoredAuth, loginAdmin, logoutAdmin, saveAuthState } from "../services/auth";
+import { initializeNotifications, disconnectNotifications, getNotificationManager, Notification as BackendNotification } from "../services/notifications";
 import { getBookings, getBookingDetail } from "../services/bookings";
 import {
   LayoutDashboard,
@@ -1431,6 +1432,54 @@ function ComingSoon({ lang, navId }: { lang: Language; navId: string }) {
   );
 }
 
+// ─── Notification adapter ─────────────────────────────────────────────────────
+
+function adaptBackendNotification(backendNotif: BackendNotification): Notification {
+  const notifTypeMap: Record<string, { icon: React.ElementType; iconBg: string; iconColor: string }> = {
+    welcome: { icon: CheckCircle, iconBg: "bg-green-50", iconColor: "text-green-600" },
+    booking_request: { icon: BookOpen, iconBg: "bg-blue-50", iconColor: "text-blue-600" },
+    booking_confirmed: { icon: CheckCircle, iconBg: "bg-green-50", iconColor: "text-green-600" },
+    booking_cancelled: { icon: AlertCircle, iconBg: "bg-red-50", iconColor: "text-red-600" },
+    payment: { icon: CreditCard, iconBg: "bg-green-50", iconColor: "text-green-600" },
+    artisan_verification: { icon: UserCheck, iconBg: "bg-orange-50", iconColor: "text-orange-600" },
+    system_alert: { icon: AlertCircle, iconBg: "bg-red-50", iconColor: "text-red-600" },
+  };
+
+  const config = notifTypeMap[backendNotif.notification_type] || {
+    icon: Bell,
+    iconBg: "bg-blue-50",
+    iconColor: "text-blue-600",
+  };
+
+  const now = new Date();
+  const created = new Date(backendNotif.created_at);
+  const diffMs = now.getTime() - created.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  let timeDisplay = "";
+  if (diffMins < 1) timeDisplay = "now";
+  else if (diffMins < 60) timeDisplay = `${diffMins}m ago`;
+  else if (diffHours < 24) timeDisplay = `${diffHours}h ago`;
+  else if (diffDays === 1) timeDisplay = "yesterday";
+  else timeDisplay = `${diffDays}d ago`;
+
+  return {
+    id: backendNotif.id,
+    title: backendNotif.title,
+    titleFR: backendNotif.title,
+    description: backendNotif.body,
+    descriptionFR: backendNotif.body,
+    timestamp: timeDisplay,
+    timestampFR: timeDisplay,
+    isRead: backendNotif.is_read,
+    icon: config.icon,
+    iconBg: config.iconBg,
+    iconColor: config.iconColor,
+  };
+}
+
 // ─── App root ─────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -1468,6 +1517,9 @@ export default function App() {
 
       setCurrentUser(data.user);
       setIsAuthenticated(true);
+      
+      // Initialize notifications after successful login
+      initializeNotifications(data.tokens.access);
     } catch (error) {
       if (error instanceof Error) {
         setAuthError(error.message);
@@ -1480,20 +1532,73 @@ export default function App() {
     }
   };
 
-  const handleNotificationRead = (id: string) => {
+  // Set up notification listeners and initial load
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const notifManager = getNotificationManager();
+    if (!notifManager) return;
+
+    // Fetch initial notifications
+    notifManager.fetchNotifications({ page: 1, page_size: 50 }).then((response) => {
+      const adaptedNotifs = response.results.map(adaptBackendNotification).reverse();
+      setNotifications(adaptedNotifs);
+    }).catch((err) => {
+      console.error("Failed to fetch initial notifications:", err);
+    });
+
+    // Listen for new real-time notifications
+    const unsubscribeNotif = notifManager.on("notification", (backendNotif: BackendNotification) => {
+      const adapted = adaptBackendNotification(backendNotif);
+      setNotifications((prev) => [adapted, ...prev]);
+    });
+
+    return () => {
+      unsubscribeNotif();
+    };
+  }, [isAuthenticated]);
+
+  const handleNotificationRead = async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    
+    const notifManager = getNotificationManager();
+    if (notifManager) {
+      try {
+        await notifManager.markNotificationRead(id);
+      } catch (err) {
+        console.error("Failed to mark notification as read:", err);
+      }
+    }
   };
 
   const handleNotificationDelete = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    
+    const notifManager = getNotificationManager();
+    if (notifManager) {
+      try {
+        await notifManager.markAllRead();
+      } catch (err) {
+        console.error("Failed to mark all notifications as read:", err);
+      }
+    }
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     setNotifications([]);
+    
+    const notifManager = getNotificationManager();
+    if (notifManager) {
+      try {
+        await notifManager.clearReadNotifications();
+      } catch (err) {
+        console.error("Failed to clear read notifications:", err);
+      }
+    }
   };
 
   // Previous mock logout handler preserved for future reference:
@@ -1518,11 +1623,12 @@ export default function App() {
     } catch (error) {
       console.warn("Logout API failed:", error);
     } finally {
+      disconnectNotifications();
       clearStoredAuth();
       setIsAuthenticated(false);
       setCurrentUser(null);
-      setActiveNav("dashboard"); // Reset to dashboard for next login
-      setNotifications(INITIAL_NOTIFICATIONS); // Reset notifications
+      setActiveNav("dashboard");
+      setNotifications(INITIAL_NOTIFICATIONS);
       setSidebarOpen(false);
     }
   };
