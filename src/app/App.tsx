@@ -1225,11 +1225,11 @@ function BookingsPage({ lang }: { lang: Language }) {
               <div className="p-4 bg-muted/30 rounded-2xl border border-border">
                 <h4 className="text-sm font-semibold text-foreground mb-3">{lang === "EN" ? "Artisan" : "Artisan"}</h4>
                 <div className="flex items-center gap-3">
-                  <AvatarImg src={selectedBooking.artisan.profile_picture} name={selectedBooking.artisan.full_name} size={52} />
+                  <AvatarImg src={selectedBooking.artisan?.profile_picture || "https://via.placeholder.com/52"} name={selectedBooking.artisan?.full_name || "N/A"} size={52} />
                   <div>
-                    <p className="font-semibold text-foreground">{selectedBooking.artisan.full_name || "N/A"}</p>
-                    <p className="text-sm text-muted-foreground">{selectedBooking.artisan.email || "N/A"}</p>
-                    <p className="text-sm text-muted-foreground">{selectedBooking.artisan.phone || "N/A"}</p>
+                    <p className="font-semibold text-foreground">{selectedBooking.artisan?.full_name || "N/A"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedBooking.artisan?.email || "N/A"}</p>
+                    <p className="text-sm text-muted-foreground">{selectedBooking.artisan?.phone || "N/A"}</p>
                   </div>
                 </div>
               </div>

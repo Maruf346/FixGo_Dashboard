@@ -1164,13 +1164,17 @@ function AddServiceForm({ lang, editingService, onSaveComplete }: { lang: Langua
         <label className="block text-sm font-medium text-[#364153] font-['Inter',sans-serif]">
           {t.completionTime}
         </label>
-        <input
-          type="text"
-          placeholder={t.timePlaceholder}
-          value={completionTime}
-          onChange={(e) => setCompletionTime(e.target.value)}
-          className="w-full px-4 py-2.5 bg-white border border-[#d1d5dc] rounded-[14px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-base text-[rgba(10,10,10,0.5)] font-['Inter',sans-serif]"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="1"
+            placeholder={t.timePlaceholder}
+            value={completionTime}
+            onChange={(e) => setCompletionTime(e.target.value)}
+            className="flex-1 px-4 py-2.5 bg-white border border-[#d1d5dc] rounded-[14px] outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-base text-[rgba(10,10,10,0.5)] font-['Inter',sans-serif]"
+          />
+          <span className="text-sm font-medium text-[#364153] font-['Inter',sans-serif]">hrs</span>
+        </div>
       </div>
 
       {/* Priority */}
