@@ -272,73 +272,7 @@ const ALL_BOOKINGS = [
   { id: "b20", orderId: "#ID238995", date: "May 3, 2022",  buyer: "Aaron Müller",  buyerAvatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=40&h=40&fit=crop&auto=format", payment: "Paid",    artisan: "Sofia Greco",  artisanAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=40&h=40&fit=crop&auto=format", service: "Gardening",      status: "completed",  budget: "$65" },
 ];
 
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  {
-    id: "n1",
-    title: "New booking request received",
-    titleFR: "Nouvelle demande de réservation reçue",
-    description: "A customer has requested a plumbing service",
-    descriptionFR: "Un client a demandé un service de plomberie",
-    timestamp: "2 min ago",
-    timestampFR: "Il y a 2 min",
-    isRead: false,
-    icon: BookOpen,
-    iconBg: "bg-blue-50",
-    iconColor: "text-blue-600",
-  },
-  {
-    id: "n2",
-    title: "Payment completed successfully",
-    titleFR: "Paiement effectué avec succès",
-    description: "Order #ID238976 payment received",
-    descriptionFR: "Paiement de la commande #ID238976 reçu",
-    timestamp: "1 hour ago",
-    timestampFR: "Il y a 1 heure",
-    isRead: false,
-    icon: CreditCard,
-    iconBg: "bg-green-50",
-    iconColor: "text-green-600",
-  },
-  {
-    id: "n3",
-    title: "Artisan verification pending",
-    titleFR: "Vérification artisan en attente",
-    description: "New artisan account requires approval",
-    descriptionFR: "Nouveau compte artisan nécessite une approbation",
-    timestamp: "3 hours ago",
-    timestampFR: "Il y a 3 heures",
-    isRead: false,
-    icon: UserCheck,
-    iconBg: "bg-orange-50",
-    iconColor: "text-orange-600",
-  },
-  {
-    id: "n4",
-    title: "Client account deactivated",
-    titleFR: "Compte client désactivé",
-    description: "User requested account deactivation",
-    descriptionFR: "L'utilisateur a demandé la désactivation du compte",
-    timestamp: "Yesterday",
-    timestampFR: "Hier",
-    isRead: true,
-    icon: AlertCircle,
-    iconBg: "bg-red-50",
-    iconColor: "text-red-600",
-  },
-  {
-    id: "n5",
-    title: "Service completed",
-    titleFR: "Service terminé",
-    description: "Electrical service marked as completed",
-    descriptionFR: "Service électrique marqué comme terminé",
-    timestamp: "Yesterday",
-    timestampFR: "Hier",
-    isRead: true,
-    icon: CheckCircle,
-    iconBg: "bg-purple-50",
-    iconColor: "text-purple-600",
-  },
-];
+const INITIAL_NOTIFICATIONS: Notification[] = [];
 
 // ─── Shared atoms ─────────────────────────────────────────────────────────────
 
@@ -1496,7 +1430,7 @@ export default function App() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [lang, setLang] = useState<Language>("EN");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -1538,6 +1472,14 @@ export default function App() {
       setAuthLoading(false);
     }
   };
+
+  // Initialize websocket from stored auth when refreshing the page
+  useEffect(() => {
+    if (!isAuthenticated || !storedAuth.accessToken) return;
+    if (!getNotificationManager()) {
+      initializeNotifications(storedAuth.accessToken);
+    }
+  }, [isAuthenticated, storedAuth.accessToken]);
 
   // Set up notification listeners and initial load
   useEffect(() => {
@@ -1635,7 +1577,7 @@ export default function App() {
       setIsAuthenticated(false);
       setCurrentUser(null);
       setActiveNav("dashboard");
-      setNotifications(INITIAL_NOTIFICATIONS);
+      setNotifications([]);
       setSidebarOpen(false);
     }
   };
