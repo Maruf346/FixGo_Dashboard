@@ -25,6 +25,8 @@ interface ClientWithLocation extends Client {
   locationDisplay: string;
 }
 
+type ClientLocation = Client["location"];
+
 function AvatarImg({ src, name, size = 32, className = "" }: { src: string; name: string; size?: number; className?: string }) {
   const initial = name?.trim()?.charAt(0)?.toUpperCase() || "?";
   return src ? (
@@ -42,6 +44,13 @@ function AvatarImg({ src, name, size = 32, className = "" }: { src: string; name
       {initial}
     </div>
   );
+}
+
+function formatLocation(location?: ClientLocation | null) {
+  if (!location) return "—";
+  return [location.address_line, location.city, location.state, location.country]
+    .filter(Boolean)
+    .join(", ") || "—";
 }
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
@@ -96,7 +105,7 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
       });
       const clientsWithLocation = response.results.map((client: Client) => ({
         ...client,
-        locationDisplay: `${client.location.city || ""}, ${client.location.state || ""}, ${client.location.country || ""}`.replace(/^, |, $/, "").replace(/, , /g, ", "),
+        locationDisplay: formatLocation(client.location),
       }));
       setClients(clientsWithLocation);
       setTotalCount(response.count);
@@ -445,7 +454,7 @@ export default function ClientsManagement({ lang }: { lang: Language }) {
                 <h4 className="text-sm font-semibold text-foreground mb-2">
                   {lang === "EN" ? "Location" : "Emplacement"}
                 </h4>
-                <p className="text-sm text-muted-foreground">{`${selectedClient.location.address_line}, ${selectedClient.location.city}, ${selectedClient.location.state}, ${selectedClient.location.country}`}</p>
+                <p className="text-sm text-muted-foreground">{formatLocation(selectedClient.location)}</p>
               </div>
 
               <div>

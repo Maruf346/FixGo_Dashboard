@@ -5,7 +5,24 @@ import { ChatSessionDetail, ChatSessionListItem, getChatSessionDetail, getChatSe
 
 type Language = "EN" | "FR";
 
-const USER_PLACEHOLDER = "https://via.placeholder.com/48/94a3b8/ffffff?text=U";
+function AvatarImg({ src, name, size = 32, className = "" }: { src?: string | null; name: string; size?: number; className?: string }) {
+  const initial = name?.trim()?.charAt(0)?.toUpperCase() || "?";
+  return src ? (
+    <img
+      src={src}
+      alt={name}
+      style={{ width: size, height: size }}
+      className={`rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0 ${className}`}
+    />
+  ) : (
+    <div
+      style={{ width: size, height: size }}
+      className={`rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center border-2 border-white shadow-sm flex-shrink-0 ${className}`}
+    >
+      {initial}
+    </div>
+  );
+}
 
 export default function Messages({ lang }: { lang: Language }) {
   const [sessions, setSessions] = useState<ChatSessionListItem[]>([]);
@@ -112,7 +129,7 @@ export default function Messages({ lang }: { lang: Language }) {
     fetchConversation();
   }, [accessToken, selectedSessionId]);
 
-  const selectedAvatar = activeSession?.user_picture || USER_PLACEHOLDER;
+  const selectedAvatar = activeSession?.user_picture || null;
   const selectedName = activeSession?.user_name || t.noConversation;
   const selectedEmail = activeSession?.user_email || "";
   const selectedTypeLabel = activeSession?.user_type === "artisan" ? t.artisan : t.client;
@@ -173,10 +190,11 @@ export default function Messages({ lang }: { lang: Language }) {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <img
-                      src={session.user_picture || USER_PLACEHOLDER}
-                      alt={session.user_name || "User"}
-                      className="w-11 h-11 rounded-full object-cover flex-shrink-0"
+                    <AvatarImg
+                      src={session.user_picture || null}
+                      name={session.user_name || t.user}
+                      size={44}
+                      className="w-11 h-11"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-3 mb-1">
@@ -229,7 +247,7 @@ export default function Messages({ lang }: { lang: Language }) {
       <div className="flex-1 flex flex-col bg-background">
         <div className="px-6 py-4 border-b border-border bg-card">
           <div className="flex items-center gap-3">
-            <img src={selectedAvatar} alt={selectedName} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+            <AvatarImg src={selectedAvatar} name={selectedName} size={48} className="w-12 h-12" />
             <div className="flex-1 min-w-0">
               <h2 className="text-base font-semibold text-foreground truncate">{selectedName}</h2>
               <p className="text-xs text-muted-foreground truncate">{selectedEmail || "—"}</p>
@@ -252,10 +270,11 @@ export default function Messages({ lang }: { lang: Language }) {
                 <div key={msg.id} className={`flex ${isUser ? "justify-start" : "justify-end"}`}>
                   <div className={`flex items-start gap-2 max-w-[80%] ${isUser ? "flex-row" : "flex-row-reverse"}`}>
                     {isUser ? (
-                      <img
-                        src={selectedAvatar}
-                        alt={selectedName}
-                        className="w-9 h-9 rounded-full object-cover flex-shrink-0 mt-1"
+                      <AvatarImg
+                        src={selectedSession.user_picture || null}
+                        name={selectedSession.user_name || t.user}
+                        size={36}
+                        className="w-9 h-9 mt-1"
                       />
                     ) : (
                       <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-1 text-white">

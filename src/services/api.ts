@@ -22,6 +22,17 @@ export class ApiError extends Error {
   }
 }
 
+const AUTH_STORAGE_KEY = "fixgo_auth_state";
+
+function clearAuthStorage() {
+  try {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}, token?: string) {
   const url = getApiUrl(path);
   const headers: Record<string, string> = {
@@ -43,6 +54,12 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}, token
   }
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      clearAuthStorage();
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
+    }
     const message = data?.message || data?.detail || response.statusText || "API request failed";
     throw new ApiError(message, response.status, data);
   }
