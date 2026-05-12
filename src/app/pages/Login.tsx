@@ -77,29 +77,11 @@ export default function Login({ lang, onLangChange, onLogin, loading = false, er
         <div className="bg-white rounded-2xl shadow-xl border border-[#e5e7eb] p-8 sm:p-10">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <div
-              className="w-16 h-16 rounded-xl flex items-center justify-center mb-4 shadow-lg"
-              style={{ background: "linear-gradient(145deg, #1b457c, #5286ca)" }}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="w-8 h-8 text-white"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            </div>
-            <h1
-              className="text-3xl font-bold mb-1"
-              style={{ fontFamily: "Poppins, sans-serif", color: "#1b457c" }}
-            >
-              FIXGO
-            </h1>
+            <img
+              src="/logo.png"
+              alt="FIXGO"
+              className="h-20 sm:h-24 w-auto object-contain mb-4"
+            />
             <p className="text-xs text-[#6b7280]">Admin Dashboard</p>
           </div>
 
