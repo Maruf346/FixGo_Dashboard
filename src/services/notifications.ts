@@ -52,7 +52,7 @@ export class NotificationManager {
 
   private buildWsUrl(): string {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
+    const host = "10.10.20.45"; // Replace with your backend host
     return `${protocol}//${host}/ws/notifications/?token=${this.token}`;
   }
 

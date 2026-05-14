@@ -106,7 +106,7 @@ export async function updateAdminProfile(accessToken: string, data: {
 }
 
 export async function logoutAdmin(accessToken: string) {
-  return apiFetch("/api/user/admin/logout/", {
+  return apiFetch("/api/user/logout/", {
     method: "POST",
   }, accessToken);
 }
