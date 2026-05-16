@@ -113,7 +113,11 @@ export class NotificationManager {
         try {
           const data = JSON.parse(event.data);
           if (data.type === "notification") {
-            this.emit("notification", data.notification);
+            // Backend may send the notification payload either as `data.notification`
+            // or flattened at the top level. Emit the inner object if present,
+            // otherwise emit the whole message so listeners can handle both.
+            const payload = data.notification ?? data;
+            this.emit("notification", payload);
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);

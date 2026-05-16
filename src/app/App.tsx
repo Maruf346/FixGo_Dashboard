@@ -1375,7 +1375,24 @@ function ComingSoon({ lang, navId }: { lang: Language; navId: string }) {
 
 // ─── Notification adapter ─────────────────────────────────────────────────────
 
-function adaptBackendNotification(backendNotif: BackendNotification): Notification {
+function adaptBackendNotification(backendNotif: BackendNotification | any): Notification {
+  if (!backendNotif) {
+    // Defensive fallback when websocket emitted an unexpected payload
+    const now = new Date();
+    return {
+      id: `notif-fallback-${now.getTime()}`,
+      title: "Notification",
+      titleFR: "Notification",
+      description: "(invalid payload)",
+      descriptionFR: "(payload invalide)",
+      timestamp: "now",
+      timestampFR: "now",
+      isRead: false,
+      icon: Bell,
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
+    };
+  }
   const notifTypeMap: Record<string, { icon: React.ElementType; iconBg: string; iconColor: string }> = {
     welcome: { icon: CheckCircle, iconBg: "bg-green-50", iconColor: "text-green-600" },
     booking_request: { icon: BookOpen, iconBg: "bg-blue-50", iconColor: "text-blue-600" },
@@ -1386,14 +1403,16 @@ function adaptBackendNotification(backendNotif: BackendNotification): Notificati
     system_alert: { icon: AlertCircle, iconBg: "bg-red-50", iconColor: "text-red-600" },
   };
 
-  const config = notifTypeMap[backendNotif.notification_type] || {
+  const notifType = backendNotif.notification_type ?? backendNotif.type ?? "";
+  const config = notifTypeMap[notifType] || {
     icon: Bell,
     iconBg: "bg-blue-50",
     iconColor: "text-blue-600",
   };
 
   const now = new Date();
-  const created = new Date(backendNotif.created_at);
+  const createdRaw = backendNotif.created_at ?? backendNotif.timestamp ?? backendNotif.createdAt ?? Date.now();
+  const created = new Date(createdRaw);
   const diffMs = now.getTime() - created.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
@@ -1406,15 +1425,20 @@ function adaptBackendNotification(backendNotif: BackendNotification): Notificati
   else if (diffDays === 1) timeDisplay = "yesterday";
   else timeDisplay = `${diffDays}d ago`;
 
+  const id = backendNotif.id ?? backendNotif.notification_id ?? backendNotif.notificationId ?? `${created.getTime()}-${Math.random().toString(36).slice(2,8)}`;
+  const title = backendNotif.title ?? backendNotif.notification_title ?? "";
+  const body = backendNotif.body ?? backendNotif.message ?? backendNotif.description ?? "";
+  const isRead = backendNotif.is_read ?? backendNotif.read ?? backendNotif.isRead ?? false;
+
   return {
-    id: backendNotif.id,
-    title: backendNotif.title,
-    titleFR: backendNotif.title,
-    description: backendNotif.body,
-    descriptionFR: backendNotif.body,
+    id,
+    title,
+    titleFR: title,
+    description: body,
+    descriptionFR: body,
     timestamp: timeDisplay,
     timestampFR: timeDisplay,
-    isRead: backendNotif.is_read,
+    isRead,
     icon: config.icon,
     iconBg: config.iconBg,
     iconColor: config.iconColor,
